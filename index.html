@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f0906">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2716%27 fill=%27%23160e09%27/%3E%3Cpath d=%27M16 6c-4 5-8 9-8 13a8 8 0 0 0 16 0c0-4-4-8-8-13z%27 fill=%27%23e0b25c%27/%3E%3C/svg%3E">
+  <meta name="description" content="Encomende salgados de festa da Cheiro de Pão Delicatessen. Monte sua bandeja e envie o pedido pelo WhatsApp.">
+  <title>Cheiro de Pão Delicatessen · Encomenda de salgados</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="grao" aria-hidden="true"></div>
+
+  <!-- NAVEGAÇÃO -->
+  <header class="nav" id="nav">
+    <a class="marca" href="#topo" aria-label="Cheiro de Pão, início">
+      <span class="marca-nome">Cheiro de Pão</span>
+      <span class="marca-sub">Delicatessen</span>
+    </a>
+    <nav class="nav-links" aria-label="Seções">
+      <a href="#como">Como funciona</a>
+      <a href="#encomenda">Cardápio</a>
+      <a href="#eventos">Bolos e doces</a>
+    </nav>
+    <a class="nav-cta" href="#encomenda">Encomendar</a>
+  </header>
+
+  <!-- HERO 3D -->
+  <section class="hero" id="topo">
+    <canvas class="cena" id="cena-hero" aria-hidden="true"></canvas>
+    <div class="hero-conteudo container">
+      <p class="sobretitulo" data-revelar>Delicatessen · Cruz das Almas, BA</p>
+      <h1 data-revelar>Salgados que viram<br><span class="ouro">o assunto da festa.</span></h1>
+      <p class="hero-sub" data-revelar>Escolha os sabores, veja sua bandeja ganhar forma e envie o pedido pronto pelo WhatsApp.</p>
+      <div class="hero-acoes" data-revelar>
+        <a class="botao botao-ouro" href="#encomenda" data-magnetico>Montar minha bandeja <span aria-hidden="true">→</span></a>
+        <a class="botao botao-vidro" href="#como">Como funciona</a>
+      </div>
+      <ul class="hero-dados" data-revelar>
+        <li><strong id="dado-opcoes">43</strong><span>opções no cardápio</span></li>
+        <li><strong id="dado-preco">R$ 0,50</strong><span>a partir de, por unidade</span></li>
+        <li><strong>WhatsApp</strong><span>pedido direto, sem cadastro</span></li>
+      </ul>
+    </div>
+    <div class="rolar" aria-hidden="true"><span></span></div>
+  </section>
+
+  <!-- FAIXA DE SABORES -->
+  <div class="faixa" aria-hidden="true"><div class="faixa-trilho" id="faixa"></div></div>
+
+  <!-- COMO FUNCIONA -->
+  <section class="secao como" id="como">
+    <div class="container">
+      <p class="sobretitulo" data-revelar>Como funciona</p>
+      <h2 class="titulo-secao" data-revelar>Do cardápio à sua mesa<br><span class="suave">em três passos.</span></h2>
+      <div class="passos">
+        <article class="passo" data-revelar data-tilt>
+          <span class="passo-num">01</span>
+          <h3>Monte sua bandeja</h3>
+          <p>Escolha entre fritos, assados e pãezinhos. Cada sabor a partir de 10 unidades.</p>
+        </article>
+        <article class="passo" data-revelar data-tilt>
+          <span class="passo-num">02</span>
+          <h3>Agende a retirada</h3>
+          <p>Defina data e horário. Itens especiais pedem 2 dias de antecedência.</p>
+        </article>
+        <article class="passo" data-revelar data-tilt>
+          <span class="passo-num">03</span>
+          <h3>Confirme no WhatsApp</h3>
+          <p>Seu pedido chega pronto para a loja. A confirmação é feita com 50% de entrada.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- MONTAR ENCOMENDA -->
+  <section class="secao montar" id="encomenda">
+    <div class="container">
+      <div class="montar-cabeca">
+        <p class="sobretitulo" data-revelar>Cardápio de salgados</p>
+        <h2 class="titulo-secao" data-revelar>Monte sua bandeja.</h2>
+        <p class="montar-regras" data-revelar>
+          Mínimo de <strong>10 un.</strong> por sabor
+          <span class="sep">·</span>
+          <span class="selo">Especial</span> mínimo de <strong>25 un.</strong> e <strong>2 dias</strong> de antecedência
+        </p>
+      </div>
+
+      <div class="montar-grade">
+        <div class="bandeja-col">
+          <div class="bandeja" id="bandeja">
+            <canvas class="cena" id="cena-bandeja" aria-hidden="true"></canvas>
+            <div class="bandeja-vazia" id="bandeja-vazia">
+              <strong>Sua bandeja está vazia</strong>
+              <span>Adicione um sabor e veja ele chegar aqui.</span>
+            </div>
+            <div class="bandeja-rodape">
+              <span class="chip" id="bandeja-qtd">0 salgados</span>
+              <span class="bandeja-legenda" id="bandeja-legenda"></span>
+            </div>
+            <div class="dica-peca" id="dica-peca" hidden></div>
+          </div>
+        </div>
+
+        <div class="menu-col">
+          <div class="abas-faixa">
+            <div class="abas" id="abas" role="tablist" aria-label="Categorias">
+              <span class="aba-indicador" id="aba-indicador" aria-hidden="true"></span>
+            </div>
+          </div>
+          <ul class="lista" id="lista"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BOLOS E DOCES -->
+  <section class="secao eventos" id="eventos">
+    <div class="container">
+      <div class="eventos-cartao" data-revelar data-tilt>
+        <div>
+          <p class="sobretitulo">Para todo tipo de evento</p>
+          <h2 class="titulo-secao">Bolos e doces<br><span class="ouro">sob encomenda.</span></h2>
+          <p class="eventos-texto">Aniversários, casamentos, chás e eventos corporativos. Conte sua ideia e receba um orçamento personalizado.</p>
+        </div>
+        <a class="botao botao-ouro" id="link-orcamento" href="#" target="_blank" rel="noopener" data-magnetico>Pedir orçamento <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- RODAPÉ -->
+  <footer class="rodape">
+    <div class="container rodape-grade">
+      <div>
+        <span class="marca-nome">Cheiro de Pão</span>
+        <span class="marca-sub">Delicatessen</span>
+        <p class="rodape-frase">“Cheirinho de qualidade no ar”</p>
+      </div>
+      <div>
+        <h4>Endereço</h4>
+        <p>Rua Grisógno Fernandes, nº 972<br>Cruz das Almas, BA</p>
+      </div>
+      <div>
+        <h4>Contato</h4>
+        <p><a href="https://instagram.com/cheirodepao.delicatessen" target="_blank" rel="noopener">@cheirodepao.delicatessen</a><br>
+          <a id="link-whats-rodape" href="#" target="_blank" rel="noopener">(75) 98241-9173</a><br>
+          <small>Atendimento por mensagem, não atendemos ligações.</small></p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- BARRA FLUTUANTE -->
+  <div class="barra" id="barra" aria-hidden="true">
+    <div class="barra-info">
+      <span id="barra-qtd">0 salgados</span>
+      <strong id="barra-total">R$ 0,00</strong>
+    </div>
+    <button type="button" class="botao botao-ouro" id="abrir-pedido">Finalizar pedido</button>
+  </div>
+
+  <!-- PAINEL DO PEDIDO -->
+  <div class="painel" id="painel" aria-hidden="true">
+    <div class="painel-fundo" data-fechar></div>
+    <aside class="painel-caixa" role="dialog" aria-modal="true" aria-labelledby="painel-titulo">
+      <div class="painel-topo">
+        <h2 id="painel-titulo">Seu pedido</h2>
+        <button type="button" class="fechar" data-fechar aria-label="Fechar">✕</button>
+      </div>
+
+      <div class="painel-corpo">
+        <ul class="resumo" id="resumo"></ul>
+        <button type="button" class="link-editar" data-fechar>+ Adicionar mais sabores</button>
+
+        <form id="form" novalidate>
+          <label class="campo">
+            <span>Seu nome</span>
+            <input type="text" id="nome" autocomplete="name" placeholder="Como devemos chamar você?">
+            <small class="erro" data-erro="nome"></small>
+          </label>
+
+          <div class="linha">
+            <label class="campo">
+              <span>Data da retirada</span>
+              <input type="date" id="data">
+            </label>
+            <label class="campo">
+              <span>Horário</span>
+              <input type="time" id="hora">
+            </label>
+          </div>
+          <small class="dica" id="dica-data"></small>
+          <small class="erro" data-erro="data"></small>
+
+          <fieldset class="campo">
+            <span>Forma de pagamento</span>
+            <div class="opcoes" id="pagamentos"></div>
+            <small class="erro" data-erro="pagamento"></small>
+          </fieldset>
+
+          <label class="campo">
+            <span>Observações <em>(opcional)</em></span>
+            <textarea id="obs" rows="2" placeholder="Ex.: aniversário infantil, embalar separado…"></textarea>
+          </label>
+        </form>
+
+        <details class="condicoes">
+          <summary>Condições da encomenda</summary>
+          <ul id="condicoes"></ul>
+        </details>
+      </div>
+
+      <div class="painel-rodape">
+        <div class="totais">
+          <div><span>Total</span><strong id="total-final"></strong></div>
+          <div class="entrada"><span>Entrada para confirmar (50%)</span><strong id="entrada"></strong></div>
+        </div>
+        <button type="button" class="botao botao-whats" id="enviar">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.1.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.5-.3Z"/></svg>
+          Enviar pedido pelo WhatsApp
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <div class="aviso" id="aviso" role="status" aria-live="polite"></div>
+
+  <script src="cardapio.js"></script>
+  <script src="app.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    // O 3D é um complemento: se não carregar, a encomenda continua funcionando.
+    import("./cena3d.js").catch((e) => {
+      console.warn("3D indisponível:", e);
+      document.documentElement.classList.add("sem-3d");
+    });
+  </script>
+</body>
+</html>
