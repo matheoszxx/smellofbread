@@ -1292,7 +1292,9 @@ function cenaBandeja(canvas, container, formas, mats, tex, doces, matsDoces, tex
     olhar.set(0, 0.05 + vitrineEase * 0.85, 0.25 - vitrineEase * 0.15);
     camera.position.set(0, olhar.y + Math.sin(elev) * dist, olhar.z + Math.cos(elev) * dist);
     camera.lookAt(olhar);
-    camera.setViewOffset(W, H, 0, -escondido / 2, W, H);
+    // Com a bandeja vazia, sobe a cena para liberar espaço para o texto de baixo
+    const subir = v * 0.13 * vitrineEase;
+    camera.setViewOffset(W, H, 0, -escondido / 2 + subir, W, H);
     camera.updateProjectionMatrix();
   }
 
