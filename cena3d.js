@@ -312,151 +312,9 @@ function quandoVisivel(el, aoMudar) {
 const amortecer = (atual, alvo, velocidade, dt) => atual + (alvo - atual) * (1 - Math.exp(-velocidade * dt));
 
 // ---------------------------------------------------------
-// HERO: coxinha em destaque com salgados orbitando
-// ---------------------------------------------------------
-function cenaHero(canvas, formas, mats, tex) {
-  const renderer = criarRenderizador(canvas);
-  const cena = new THREE.Scene();
-  cena.environment = ambiente(renderer);
-  cena.environmentIntensity = 0.45;
-
-  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-  camera.position.set(0, 0.3, 9);
-
-  const chave = new THREE.DirectionalLight("#ffd29c", 2.8);
-  chave.position.set(3, 4, 5);
-  const contra = new THREE.DirectionalLight("#ff8a3a", 5);
-  contra.position.set(-4, 2.5, -4);
-  const contra2 = new THREE.DirectionalLight("#ffb46a", 2.5);
-  contra2.position.set(4, -1, -3);
-  cena.add(chave, contra, contra2, new THREE.HemisphereLight("#ffe6c4", "#2a1406", 0.35));
-
-  const raiz = new THREE.Group();
-  cena.add(raiz);
-  const grupo = new THREE.Group();
-  raiz.add(grupo);
-
-  // Peça principal
-  const pivo = new THREE.Group();
-  const principal = new THREE.Mesh(formas.coxinha.geo, mats.frito);
-  principal.scale.setScalar(5);
-  principal.position.y = -formas.coxinha.altura * 5 * 0.5;
-  pivo.add(principal);
-  pivo.rotation.z = -0.18;
-  grupo.add(pivo);
-
-  // Satélites
-  const satelites = [
-    ["bola", 2.25, 1.15, 0.0, 3.6],
-    ["empada", 2.7, -0.9, 1.1, 3.6],
-    ["esfirra", 2.4, 0.15, 2.2, 3.2],
-    ["pao", 2.9, 1.55, 3.2, 3.4],
-    ["camarao", 2.3, -1.55, 4.1, 3.6],
-    ["sonho", 2.8, -0.1, 5.1, 3.2],
-    ["barquete", 2.5, 0.95, 5.85, 3.0],
-  ].map(([nome, raio, y, fase, escala]) => {
-    const f = formas[nome];
-    const m = new THREE.Mesh(f.geo, mats[f.mat]);
-    m.scale.setScalar(escala * 0.42);
-    m.geometry.computeBoundingBox();
-    const g = new THREE.Group();
-    m.position.y = -f.altura * escala * 0.42 * 0.5;
-    g.add(m);
-    g.rotation.set(Math.random() * 0.8, Math.random() * PI * 2, Math.random() * 0.6);
-    grupo.add(g);
-    return { g, raio, y, fase, giro: (Math.random() - 0.5) * 0.8 + 0.4 };
-  });
-
-  // Partículas douradas (farinha e calor no ar)
-  const N = toque ? 160 : 320;
-  const pos = new Float32Array(N * 3);
-  const vel = new Float32Array(N);
-  for (let i = 0; i < N; i++) {
-    pos[i * 3] = (Math.random() - 0.5) * 12;
-    pos[i * 3 + 1] = (Math.random() - 0.5) * 8;
-    pos[i * 3 + 2] = (Math.random() - 0.5) * 6;
-    vel[i] = 0.08 + Math.random() * 0.25;
-  }
-  const geoP = new THREE.BufferGeometry();
-  geoP.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  const particulas = new THREE.Points(geoP, new THREE.PointsMaterial({
-    size: 0.06, map: tex.brilho, color: "#f4cf8a", transparent: true, opacity: 0.75,
-    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
-  }));
-  cena.add(particulas);
-
-  // Ponteiro e rolagem
-  const alvo = { x: 0, y: 0 };
-  const atual = { x: 0, y: 0 };
-  if (!toque) {
-    window.addEventListener("pointermove", (e) => {
-      alvo.x = (e.clientX / innerWidth - 0.5) * 2;
-      alvo.y = (e.clientY / innerHeight - 0.5) * 2;
-    }, { passive: true });
-  }
-
-  let largo = false;
-  function redimensionar() {
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if (!w || !h) return;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    largo = w / h > 1.05 && w >= 900;
-    camera.position.z = largo ? 9 : 10.5;
-    camera.updateProjectionMatrix();
-    raiz.position.set(largo ? 2.35 : 0, largo ? -0.1 : 1.2, 0);
-    raiz.scale.setScalar(largo ? 0.78 : 0.6);
-  }
-  new ResizeObserver(redimensionar).observe(canvas);
-  redimensionar();
-
-  const relogio = new THREE.Clock();
-  let t = 0, primeiro = true;
-  function quadro() {
-    const dt = Math.min(relogio.getDelta(), 0.05);
-    const vel0 = reduzido ? 0.15 : 1;
-    t += dt * vel0;
-
-    atual.x = amortecer(atual.x, alvo.x, 3, dt);
-    atual.y = amortecer(atual.y, alvo.y, 3, dt);
-    const rolagem = Math.min(window.scrollY / innerHeight, 1.2);
-
-    pivo.rotation.y = t * 0.45;
-    pivo.position.y = Math.sin(t * 1.1) * 0.08;
-    grupo.rotation.y = atual.x * 0.35 + rolagem * 0.9;
-    grupo.rotation.x = atual.y * 0.18 + rolagem * 0.25;
-
-    satelites.forEach((s) => {
-      const a = s.fase + t * 0.16;
-      s.g.position.set(Math.cos(a) * s.raio, s.y + Math.sin(t * 0.9 + s.fase) * 0.14, Math.sin(a) * s.raio * 0.75);
-      s.g.rotation.y += dt * s.giro * vel0;
-      s.g.rotation.x += dt * s.giro * 0.4 * vel0;
-    });
-
-    const p = geoP.attributes.position;
-    for (let i = 0; i < N; i++) {
-      let y = p.getY(i) + vel[i] * dt * vel0;
-      if (y > 4) y = -4;
-      p.setY(i, y);
-      p.setX(i, p.getX(i) + Math.sin(t * 0.5 + i) * 0.0015);
-    }
-    p.needsUpdate = true;
-
-    camera.position.y = 0.3 - rolagem * 1.2;
-    camera.lookAt(0, -rolagem * 0.6, 0);
-
-    renderer.render(cena, camera);
-    if (primeiro) { canvas.classList.add("pronta"); primeiro = false; }
-  }
-
-  quandoVisivel(canvas, (vis) => {
-    if (vis) relogio.getDelta();
-    renderer.setAnimationLoop(vis ? quadro : null);
-  });
-}
-
-// ---------------------------------------------------------
-// BANDEJA: tábua de madeira que recebe as peças do pedido
+// BANDEJA: tábua de madeira 3D.
+// Vazia: vitrine com a coxinha e salgados flutuando.
+// Com pedido: recebe uma peça para cada porção escolhida.
 // ---------------------------------------------------------
 function cenaBandeja(canvas, container, formas, mats, tex) {
   const renderer = criarRenderizador(canvas, true);
@@ -465,7 +323,6 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   cena.environmentIntensity = 0.5;
 
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-  const alvoCamera = new THREE.Vector3(0, 0.1, 0);
 
   const chave = new THREE.DirectionalLight("#ffdcae", 2.2);
   chave.position.set(3, 7, 4);
@@ -475,9 +332,11 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   chave.shadow.bias = -0.0004;
   chave.shadow.normalBias = 0.02;
   chave.shadow.radius = 4;
-  const contra = new THREE.DirectionalLight("#ff9446", 2.2);
+  const contra = new THREE.DirectionalLight("#ff9446", 2.6);
   contra.position.set(-4, 3, -5);
-  cena.add(chave, contra, new THREE.HemisphereLight("#ffe9cc", "#1d0e05", 0.45));
+  const contra2 = new THREE.DirectionalLight("#ffb46a", 1.4);
+  contra2.position.set(4, 1, -4);
+  cena.add(chave, contra, contra2, new THREE.HemisphereLight("#ffe9cc", "#1d0e05", 0.45));
 
   const mesa = new THREE.Group();
   cena.add(mesa);
@@ -492,7 +351,6 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   tabua.receiveShadow = true;
   mesa.add(tabua);
 
-  // Sombra suave sob a tábua
   const sombra = new THREE.Mesh(
     new THREE.CircleGeometry(R * 1.25, 64),
     new THREE.MeshBasicMaterial({ map: tex.brilho, color: "#000000", transparent: true, opacity: 0.55, depthWrite: false })
@@ -501,7 +359,62 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   sombra.position.y = -0.27;
   cena.add(sombra);
 
-  // Um InstancedMesh por forma
+  // ---------- Vitrine (bandeja vazia) ----------
+  const vitrine = new THREE.Group();
+  mesa.add(vitrine);
+
+  const ESC_PRINCIPAL = 4.4;
+  const altPrincipal = formas.coxinha.altura * ESC_PRINCIPAL;
+  const pivo = new THREE.Group();
+  const principal = new THREE.Mesh(formas.coxinha.geo, mats.frito);
+  principal.scale.setScalar(ESC_PRINCIPAL);
+  principal.position.y = -altPrincipal / 2;
+  principal.castShadow = true;
+  pivo.add(principal);
+  pivo.rotation.z = -0.14;
+  vitrine.add(pivo);
+
+  const satelites = [
+    ["bola", 1.85, 1.75, 0.0, 1.9],
+    ["empada", 2.1, 0.75, 1.1, 2.0],
+    ["esfirra", 1.9, 1.25, 2.2, 1.8],
+    ["pao", 2.15, 2.05, 3.2, 1.9],
+    ["camarao", 1.8, 0.65, 4.1, 2.0],
+    ["sonho", 2.1, 1.55, 5.1, 1.8],
+    ["barquete", 1.95, 2.3, 5.85, 1.7],
+  ].map(([nome, raio, y, fase, escala]) => {
+    const f = formas[nome];
+    const m = new THREE.Mesh(f.geo, mats[f.mat]);
+    m.scale.setScalar(escala);
+    m.position.y = -f.altura * escala * 0.5;
+    m.castShadow = true;
+    const g = new THREE.Group();
+    g.add(m);
+    g.rotation.set(Math.random() * 0.8, Math.random() * PI * 2, Math.random() * 0.6);
+    vitrine.add(g);
+    return { g, raio, y, fase, giro: (Math.random() - 0.5) * 0.8 + 0.4 };
+  });
+
+  // Partículas douradas
+  const NP = toque ? 90 : 160;
+  const posP = new Float32Array(NP * 3);
+  const velP = new Float32Array(NP);
+  for (let i = 0; i < NP; i++) {
+    const a = Math.random() * PI * 2, r = Math.random() * 3.2;
+    posP[i * 3] = Math.cos(a) * r;
+    posP[i * 3 + 1] = Math.random() * 3.4;
+    posP[i * 3 + 2] = Math.sin(a) * r;
+    velP[i] = 0.1 + Math.random() * 0.25;
+  }
+  const geoP = new THREE.BufferGeometry();
+  geoP.setAttribute("position", new THREE.BufferAttribute(posP, 3));
+  const matP = new THREE.PointsMaterial({
+    size: 0.05, map: tex.brilho, color: "#f4cf8a", transparent: true, opacity: 0.7,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  });
+  vitrine.add(new THREE.Points(geoP, matP));
+
+  // ---------- Peças do pedido ----------
   const CAP = 180;
   const malhas = {};
   for (const [nome, f] of Object.entries(formas)) {
@@ -517,15 +430,19 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
     mesa.add(m);
   }
 
-  // Estado das peças
-  const pecas = new Map(); // chave -> peça
+  const pecas = new Map();
   let itensInfo = {};
   let destaque = null;
+  let alvoPresenca = 1;
+  let presenca = 1;
 
   const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; };
 
-  function atualizar({ itens }) {
+  function atualizar({ itens }, instantaneo = false) {
     itensInfo = Object.fromEntries(itens.map((i) => [i.id, i]));
+    alvoPresenca = itens.length ? 0 : 1;
+    if (instantaneo) presenca = alvoPresenca;
+
     const desejadas = [];
     itens.forEach((it) => { for (let k = 0; k < it.pecas; k++) desejadas.push({ chave: `${it.id}#${k}`, item: it }); });
 
@@ -533,6 +450,8 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
     const passo = Math.min(0.42, (R - 0.55) / Math.sqrt(N + 0.6));
     const ouro = 2.39996323;
     const vivas = new Set();
+    // Se a vitrine ainda está na tela, espera ela sair antes das peças caírem
+    const atrasoBase = presenca > 0.5 && !instantaneo ? 0.35 : 0;
     let novas = 0;
 
     desejadas.forEach(({ chave, item }, i) => {
@@ -543,15 +462,16 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
       const alvo = new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
       let p = pecas.get(chave);
       if (!p || p.saindo) {
-        const atraso = reduzido ? 0 : Math.min(novas, 30) * 0.035;
-        novas++;
+        const semAnimacao = reduzido || instantaneo;
         p = {
           chave, id: item.id, forma: item.forma,
-          pos: alvo.clone().add(new THREE.Vector3(0, reduzido ? 0 : 2.6 + h * 1.2, 0)),
-          vy: 0, escala: reduzido ? 1 : 0.001, alvoEscala: 1, atraso,
+          pos: alvo.clone().add(new THREE.Vector3(0, semAnimacao ? 0 : 2.6 + h * 1.2, 0)),
+          vy: 0, escala: semAnimacao ? 1 : 0.001, alvoEscala: 1,
+          atraso: semAnimacao ? 0 : atrasoBase + Math.min(novas, 30) * 0.035,
           giro: h * PI * 2, inclinacao: (h - 0.5) * 0.25, rodando: (h - 0.5) * 6,
-          caindo: !reduzido, saindo: false, alvo,
+          caindo: !semAnimacao, saindo: false, alvo,
         };
+        novas++;
         pecas.set(chave, p);
       }
       p.alvo.copy(alvo);
@@ -562,12 +482,11 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
     });
   }
 
-  // Ponteiro: girar a tábua e mostrar o nome da peça
+  // ---------- Ponteiro: girar e identificar peças ----------
   const dica = container.querySelector("#dica-peca");
   const raio = new THREE.Raycaster();
   const ponteiro = new THREE.Vector2();
   let arrastando = false, moveu = 0, ultimoX = 0, velGiro = 0;
-  let giroAuto = 0;
 
   function apontar(e) {
     const r = canvas.getBoundingClientRect();
@@ -576,8 +495,7 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
     const hits = raio.intersectObjects(Object.values(malhas).filter((m) => m.count > 0), false);
     const hit = hits.find((h) => h.instanceId !== undefined);
     if (!hit) { dica.hidden = true; return null; }
-    const chave = hit.object.userData.indice[hit.instanceId];
-    const p = pecas.get(chave);
+    const p = pecas.get(hit.object.userData.indice[hit.instanceId]);
     const info = p && itensInfo[p.id];
     if (!info) { dica.hidden = true; return null; }
     dica.innerHTML = `${info.nome}<small>${info.q} unidades</small>`;
@@ -590,8 +508,7 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   canvas.addEventListener("pointerdown", (e) => { arrastando = true; moveu = 0; ultimoX = e.clientX; });
   window.addEventListener("pointerup", (e) => {
     if (arrastando && moveu < 6 && e.target === canvas) {
-      const id = apontar(e);
-      destaque = id;
+      destaque = apontar(e);
       if (toque) setTimeout(() => { dica.hidden = true; destaque = null; }, 1800);
     }
     arrastando = false;
@@ -611,28 +528,6 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   canvas.addEventListener("pointerleave", () => { if (!toque) { dica.hidden = true; destaque = null; } });
   if (!toque) canvas.style.cursor = "grab";
 
-  document.addEventListener("encomenda:mudou", (e) => atualizar(e.detail));
-  document.addEventListener("encomenda:destaque", (e) => { destaque = e.detail.id; });
-
-  function redimensionar() {
-    const w = container.clientWidth, h = container.clientHeight;
-    if (!w || !h) return;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    // Enquadra a tábua inteira em qualquer proporção
-    const elev = w / h > 1.6 ? 0.95 : 0.9;
-    const vFov = THREE.MathUtils.degToRad(camera.fov);
-    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
-    const dist = Math.max((R * 0.92) / Math.tan(vFov / 2), (R * 1.12) / Math.tan(hFov / 2));
-    camera.position.set(0, Math.sin(elev) * dist, Math.cos(elev) * dist);
-    alvoCamera.set(0, w / h > 1.6 ? -0.15 : 0.05, w / h > 1.6 ? 0.15 : 0.25);
-    camera.lookAt(alvoCamera);
-    camera.updateProjectionMatrix();
-  }
-  new ResizeObserver(redimensionar).observe(container);
-  redimensionar();
-
-  // Inclinação suave seguindo o mouse
   const incl = { x: 0, alvo: 0 };
   if (!toque) {
     container.addEventListener("pointermove", (e) => {
@@ -641,28 +536,95 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
     });
   }
 
+  document.addEventListener("encomenda:mudou", (e) => atualizar(e.detail));
+  document.addEventListener("encomenda:destaque", (e) => { destaque = e.detail.id; });
+
+  // ---------- Câmera: enquadra a área visível do palco ----------
+  // No celular o palco encolhe ao rolar (parte de cima sai da tela);
+  // a câmera desloca e afasta para manter tudo dentro da parte visível.
+  let W = 1, H = 1;
+  function redimensionar() {
+    W = container.clientWidth;
+    H = container.clientHeight;
+    if (!W || !H) return;
+    renderer.setSize(W, H, false);
+  }
+  new ResizeObserver(redimensionar).observe(container);
+  redimensionar();
+
+  const olhar = new THREE.Vector3();
+  function enquadrar(vitrineEase) {
+    const rect = container.getBoundingClientRect();
+    const escondido = Math.min(Math.max(0, -rect.top), H * 0.75);
+    const v = Math.max(H - escondido, 60);
+    const aspecto = W / v;
+
+    camera.aspect = W / H;
+    const vFov = THREE.MathUtils.degToRad(camera.fov);
+    const tanV = Math.tan(vFov / 2) * (v / H);
+    const tanH = tanV * aspecto;
+
+    // Com a vitrine, enquadra a tábua + os salgados flutuando
+    const raioV = R * (0.92 + vitrineEase * 0.32);
+    const raioH = R * (1.1 + vitrineEase * 0.04);
+    const dist = Math.max(raioV / tanV, raioH / tanH);
+    const elev = 0.9 - vitrineEase * 0.32;
+
+    olhar.set(0, 0.05 + vitrineEase * 1.15, 0.25 - vitrineEase * 0.15);
+    camera.position.set(0, olhar.y + Math.sin(elev) * dist, olhar.z + Math.cos(elev) * dist);
+    camera.lookAt(olhar);
+    camera.setViewOffset(W, H, 0, -escondido / 2, W, H);
+    camera.updateProjectionMatrix();
+  }
+
+  // ---------- Animação ----------
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), eul = new THREE.Euler(), esc = new THREE.Vector3();
-  const corNormal = new THREE.Color(1, 1, 1), corApagada = new THREE.Color(0.38, 0.33, 0.3), corTmp = new THREE.Color();
+  const corNormal = new THREE.Color(1, 1, 1), corApagada = new THREE.Color(0.38, 0.33, 0.3);
   const relogio = new THREE.Clock();
-  let primeiro = true;
+  let t = 0, primeiro = true;
 
   function quadro() {
     const dt = Math.min(relogio.getDelta(), 0.05);
+    const vel = reduzido ? 0.15 : 1;
+    t += dt * vel;
 
-    // Giro automático lento + inércia do arraste
     if (!arrastando) {
       velGiro = amortecer(velGiro, 0, 3, dt);
-      giroAuto = reduzido ? 0 : 0.08;
-      mesa.rotation.y += velGiro + giroAuto * dt;
+      mesa.rotation.y += velGiro + (reduzido ? 0 : 0.08) * dt;
     }
     incl.x = amortecer(incl.x, incl.alvo, 4, dt);
     mesa.rotation.x = incl.x;
 
-    Object.values(malhas).forEach((m) => { m.count = 0; m.userData.indice.length = 0; });
+    // Vitrine entra e sai
+    presenca = amortecer(presenca, alvoPresenca, alvoPresenca ? 3 : 6, dt);
+    const ease = presenca * presenca * (3 - 2 * presenca);
+    vitrine.visible = presenca > 0.01;
+    if (vitrine.visible) {
+      vitrine.scale.setScalar(Math.max(ease, 0.001));
+      vitrine.position.y = (1 - ease) * 1.4;
+      matP.opacity = 0.7 * ease;
+      pivo.rotation.y = t * 0.5;
+      pivo.position.y = 0.45 + altPrincipal / 2 + Math.sin(t * 1.1) * 0.08;
+      satelites.forEach((s) => {
+        const a = s.fase + t * 0.2;
+        s.g.position.set(Math.cos(a) * s.raio, s.y + Math.sin(t * 0.9 + s.fase) * 0.12, Math.sin(a) * s.raio);
+        s.g.rotation.y += dt * s.giro * vel;
+        s.g.rotation.x += dt * s.giro * 0.4 * vel;
+      });
+      const p = geoP.attributes.position;
+      for (let i = 0; i < NP; i++) {
+        let y = p.getY(i) + velP[i] * dt * vel;
+        if (y > 3.6) y = 0;
+        p.setY(i, y);
+      }
+      p.needsUpdate = true;
+    }
+    enquadrar(ease);
 
+    // Peças
+    Object.values(malhas).forEach((m) => { m.count = 0; m.userData.indice.length = 0; });
     for (const p of pecas.values()) {
       if (p.atraso > 0) { p.atraso -= dt; continue; }
-      const f = formas[p.forma];
       const elevar = destaque && p.id === destaque ? 0.16 : 0;
 
       p.pos.x = amortecer(p.pos.x, p.alvo.x, 7, dt);
@@ -690,13 +652,10 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
       esc.setScalar(Math.max(p.escala, 0.001) * ESCALA_PECA);
       m4.compose(p.pos, q, esc);
       m.setMatrixAt(m.count, m4);
-      corTmp.copy(destaque && p.id !== destaque ? corApagada : corNormal);
-      m.setColorAt(m.count, corTmp);
+      m.setColorAt(m.count, destaque && p.id !== destaque ? corApagada : corNormal);
       m.userData.indice[m.count] = p.chave;
       m.count++;
-      void f;
     }
-
     Object.values(malhas).forEach((m) => {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
@@ -711,11 +670,8 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
     renderer.setAnimationLoop(vis ? quadro : null);
   });
 
-  // Estado inicial (pedido salvo no aparelho)
-  if (window.__encomenda) {
-    const ini = window.__encomenda.estadoBandeja();
-    atualizar(ini);
-  }
+  // Estado inicial (pedido salvo no aparelho): sem animação de queda
+  if (window.__encomenda) atualizar(window.__encomenda.estadoBandeja(), true);
 }
 
 // ---------------------------------------------------------
@@ -727,6 +683,5 @@ if (!temWebGL()) {
   const tex = criarTexturas();
   const mats = criarMateriais(tex);
   const formas = criarFormas();
-  cenaHero(document.getElementById("cena-hero"), formas, mats, tex);
   cenaBandeja(document.getElementById("cena-bandeja"), document.getElementById("bandeja"), formas, mats, tex);
 }

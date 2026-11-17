@@ -37,6 +37,23 @@
   } catch (_) { /* ignora */ }
   const salvar = () => { try { localStorage.setItem(CHAVE, JSON.stringify(estado)); } catch (_) {} };
 
+  // Último pedido enviado (para o botão "Repetir último pedido")
+  const CHAVE_ULTIMO = "cheirodepao-ultimo-pedido";
+  let ultimo = null;
+  try {
+    const u = JSON.parse(localStorage.getItem(CHAVE_ULTIMO));
+    if (u && u.qtd) {
+      u.ordem = (u.ordem || Object.keys(u.qtd)).filter((id) => porId[id] && u.qtd[id]);
+      if (u.ordem.length) ultimo = u;
+    }
+  } catch (_) { /* ignora */ }
+
+  // Se o pedido anterior já foi enviado, começa uma bandeja nova (mantém nome e pagamento)
+  if (estado.enviado) {
+    estado = { ...estado, qtd: {}, ordem: [], data: "", hora: "", obs: "", enviado: false };
+    salvar();
+  }
+
   let abaAtual = CARDAPIO[0].id;
 
   // ---------- Cálculos ----------
@@ -211,10 +228,38 @@
     $("#bandeja-legenda").textContent = t.unidades ? `cada peça ≈ ${unidadesPorPeca(t.unidades)} un.` : "";
     $("#barra-qtd").textContent = `${t.unidades} ${palavra}`;
     $("#barra-total").textContent = fmt(t.total);
+    atualizarRepetir(t.unidades);
     const barra = $("#barra");
     const mostrar = t.unidades > 0 && !$("#painel").classList.contains("aberto");
     barra.classList.toggle("visivel", mostrar);
     barra.setAttribute("aria-hidden", String(!mostrar));
+  };
+
+  // ---------- Repetir último pedido ----------
+  function atualizarRepetir(unidades) {
+    const box = $("#repetir");
+    if (!ultimo || unidades > 0) { box.hidden = true; return; }
+    const un = ultimo.ordem.reduce((s, id) => s + ultimo.qtd[id], 0);
+    const tot = ultimo.ordem.reduce((s, id) => s + ultimo.qtd[id] * porId[id].centavos, 0);
+    $("#repetir-resumo").textContent = `${un} salgados · ${ultimo.ordem.length} ${ultimo.ordem.length === 1 ? "sabor" : "sabores"} · ${fmt(tot)}`;
+    box.hidden = false;
+  }
+
+  const repetirPedido = () => {
+    if (!ultimo) return;
+    estado.qtd = {};
+    estado.ordem = [];
+    ultimo.ordem.forEach((id) => {
+      const q = Math.max(ultimo.qtd[id], porId[id].min);
+      estado.qtd[id] = q;
+      estado.ordem.push(id);
+    });
+    salvar();
+    renderLista();
+    atualizarAbas();
+    atualizarResumoGeral();
+    notificar();
+    avisar("Pedido anterior carregado. Ajuste o que quiser.");
   };
 
   // ---------- Painel do pedido ----------
@@ -263,14 +308,6 @@
     $("#data").value = estado.data;
     $("#hora").value = estado.hora;
     $("#obs").value = estado.obs;
-
-    // Dados do hero
-    $("#dado-opcoes").textContent = ITENS.length;
-    $("#dado-preco").textContent = fmt(Math.min(...ITENS.map((i) => i.centavos)));
-
-    // Faixa de sabores (duplicada para rolar sem emenda)
-    const nomes = ITENS.filter((i, idx) => idx % 2 === 0).map((i) => `<span>${i.nome}</span>`).join("");
-    $("#faixa").innerHTML = nomes + nomes;
 
     // Links de WhatsApp
     const textoOrcamento = "Olá! Vim pelo site e gostaria de um orçamento de bolo/doces para um evento.";
@@ -386,56 +423,15 @@
   $("#enviar").addEventListener("click", () => {
     if (totais().unidades === 0 || !validar()) return;
     window.open(linkWhatsApp(), "_blank", "noopener");
+    try {
+      ultimo = { qtd: { ...estado.qtd }, ordem: [...estado.ordem], em: Date.now() };
+      localStorage.setItem(CHAVE_ULTIMO, JSON.stringify(ultimo));
+    } catch (_) {}
+    estado.enviado = true;
+    salvar();
   });
 
-  // ---------- Interações visuais ----------
-  // Navegação fica sólida ao rolar
-  const nav = $("#nav");
-  const aoRolar = () => nav.classList.toggle("solida", window.scrollY > 24);
-  window.addEventListener("scroll", aoRolar, { passive: true });
-  aoRolar();
-
-  // Revelar ao entrar na tela
-  const obs = new IntersectionObserver((entradas) => {
-    entradas.forEach((en) => {
-      if (en.isIntersecting) { en.target.classList.add("visivel"); obs.unobserve(en.target); }
-    });
-  }, { threshold: 0.15, rootMargin: "0px 0px -40px 0px" });
-  $$("[data-revelar]").forEach((el) => {
-    const irmaos = $$("[data-revelar]", el.parentElement).filter((x) => x.parentElement === el.parentElement);
-    el.style.setProperty("--atraso", `${irmaos.indexOf(el) * 0.09}s`);
-    obs.observe(el);
-  });
-
-  // Inclinação 3D nos cartões e brilho que segue o cursor
-  if (!toque && !reduzido) {
-    $$("[data-tilt]").forEach((el) => {
-      el.addEventListener("pointermove", (e) => {
-        const r = el.getBoundingClientRect();
-        const x = (e.clientX - r.left) / r.width;
-        const y = (e.clientY - r.top) / r.height;
-        el.style.setProperty("--ry", `${(x - 0.5) * 8}deg`);
-        el.style.setProperty("--rx", `${(0.5 - y) * 8}deg`);
-        el.style.setProperty("--mx", `${x * 100}%`);
-        el.style.setProperty("--my", `${y * 100}%`);
-      });
-      el.addEventListener("pointerleave", () => {
-        el.style.setProperty("--rx", "0deg");
-        el.style.setProperty("--ry", "0deg");
-      });
-    });
-
-    // Botões magnéticos
-    $$("[data-magnetico]").forEach((el) => {
-      el.addEventListener("pointermove", (e) => {
-        const r = el.getBoundingClientRect();
-        const x = e.clientX - (r.left + r.width / 2);
-        const y = e.clientY - (r.top + r.height / 2);
-        el.style.transform = `translate(${x * 0.18}px, ${y * 0.28}px)`;
-      });
-      el.addEventListener("pointerleave", () => { el.style.transform = ""; });
-    });
-  }
+  $("#repetir-botao").addEventListener("click", repetirPedido);
 
   window.addEventListener("resize", moverIndicador);
   document.fonts && document.fonts.ready.then(moverIndicador);

@@ -9,149 +9,71 @@
   <title>Cheiro de Pão Delicatessen · Encomenda de salgados</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="grao" aria-hidden="true"></div>
 
-  <!-- NAVEGAÇÃO -->
-  <header class="nav" id="nav">
-    <a class="marca" href="#topo" aria-label="Cheiro de Pão, início">
+  <header class="topo">
+    <div class="marca">
       <span class="marca-nome">Cheiro de Pão</span>
       <span class="marca-sub">Delicatessen</span>
-    </a>
-    <nav class="nav-links" aria-label="Seções">
-      <a href="#como">Como funciona</a>
-      <a href="#encomenda">Cardápio</a>
-      <a href="#eventos">Bolos e doces</a>
-    </nav>
-    <a class="nav-cta" href="#encomenda">Encomendar</a>
+    </div>
+    <a class="link-bolos" id="link-orcamento" href="#" target="_blank" rel="noopener">Bolos e doces</a>
   </header>
 
-  <!-- HERO 3D -->
-  <section class="hero" id="topo">
-    <canvas class="cena" id="cena-hero" aria-hidden="true"></canvas>
-    <div class="hero-conteudo container">
-      <p class="sobretitulo" data-revelar>Delicatessen · Cruz das Almas, BA</p>
-      <h1 data-revelar>Salgados que viram<br><span class="ouro">o assunto da festa.</span></h1>
-      <p class="hero-sub" data-revelar>Escolha os sabores, veja sua bandeja ganhar forma e envie o pedido pronto pelo WhatsApp.</p>
-      <div class="hero-acoes" data-revelar>
-        <a class="botao botao-ouro" href="#encomenda" data-magnetico>Montar minha bandeja <span aria-hidden="true">→</span></a>
-        <a class="botao botao-vidro" href="#como">Como funciona</a>
-      </div>
-      <ul class="hero-dados" data-revelar>
-        <li><strong id="dado-opcoes">43</strong><span>opções no cardápio</span></li>
-        <li><strong id="dado-preco">R$ 0,50</strong><span>a partir de, por unidade</span></li>
-        <li><strong>WhatsApp</strong><span>pedido direto, sem cadastro</span></li>
-      </ul>
-    </div>
-    <div class="rolar" aria-hidden="true"><span></span></div>
-  </section>
-
-  <!-- FAIXA DE SABORES -->
-  <div class="faixa" aria-hidden="true"><div class="faixa-trilho" id="faixa"></div></div>
-
-  <!-- COMO FUNCIONA -->
-  <section class="secao como" id="como">
-    <div class="container">
-      <p class="sobretitulo" data-revelar>Como funciona</p>
-      <h2 class="titulo-secao" data-revelar>Do cardápio à sua mesa<br><span class="suave">em três passos.</span></h2>
-      <div class="passos">
-        <article class="passo" data-revelar data-tilt>
-          <span class="passo-num">01</span>
-          <h3>Monte sua bandeja</h3>
-          <p>Escolha entre fritos, assados e pãezinhos. Cada sabor a partir de 10 unidades.</p>
-        </article>
-        <article class="passo" data-revelar data-tilt>
-          <span class="passo-num">02</span>
-          <h3>Agende a retirada</h3>
-          <p>Defina data e horário. Itens especiais pedem 2 dias de antecedência.</p>
-        </article>
-        <article class="passo" data-revelar data-tilt>
-          <span class="passo-num">03</span>
-          <h3>Confirme no WhatsApp</h3>
-          <p>Seu pedido chega pronto para a loja. A confirmação é feita com 50% de entrada.</p>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- MONTAR ENCOMENDA -->
-  <section class="secao montar" id="encomenda">
-    <div class="container">
-      <div class="montar-cabeca">
-        <p class="sobretitulo" data-revelar>Cardápio de salgados</p>
-        <h2 class="titulo-secao" data-revelar>Monte sua bandeja.</h2>
-        <p class="montar-regras" data-revelar>
-          Mínimo de <strong>10 un.</strong> por sabor
-          <span class="sep">·</span>
-          <span class="selo">Especial</span> mínimo de <strong>25 un.</strong> e <strong>2 dias</strong> de antecedência
-        </p>
-      </div>
-
-      <div class="montar-grade">
-        <div class="bandeja-col">
-          <div class="bandeja" id="bandeja">
-            <canvas class="cena" id="cena-bandeja" aria-hidden="true"></canvas>
-            <div class="bandeja-vazia" id="bandeja-vazia">
-              <strong>Sua bandeja está vazia</strong>
-              <span>Adicione um sabor e veja ele chegar aqui.</span>
-            </div>
-            <div class="bandeja-rodape">
-              <span class="chip" id="bandeja-qtd">0 salgados</span>
-              <span class="bandeja-legenda" id="bandeja-legenda"></span>
-            </div>
-            <div class="dica-peca" id="dica-peca" hidden></div>
-          </div>
+  <main class="app">
+    <!-- Bandeja 3D: vitrine quando vazia, bandeja do pedido quando cheia -->
+    <div class="palco-col">
+      <div class="palco" id="bandeja">
+        <canvas class="cena" id="cena-bandeja" aria-hidden="true"></canvas>
+        <div class="palco-vazio" id="bandeja-vazia">
+          <strong>Monte sua bandeja</strong>
+          <span>Toque em <em>Adicionar</em> e veja os salgados chegando.</span>
         </div>
-
-        <div class="menu-col">
-          <div class="abas-faixa">
-            <div class="abas" id="abas" role="tablist" aria-label="Categorias">
-              <span class="aba-indicador" id="aba-indicador" aria-hidden="true"></span>
-            </div>
-          </div>
-          <ul class="lista" id="lista"></ul>
+        <div class="palco-rodape">
+          <span class="chip" id="bandeja-qtd"></span>
+          <span class="palco-legenda" id="bandeja-legenda"></span>
         </div>
+        <div class="dica-peca" id="dica-peca" hidden></div>
       </div>
     </div>
-  </section>
 
-  <!-- BOLOS E DOCES -->
-  <section class="secao eventos" id="eventos">
-    <div class="container">
-      <div class="eventos-cartao" data-revelar data-tilt>
+    <!-- Cardápio -->
+    <section class="cardapio" aria-label="Cardápio de salgados">
+      <p class="regras">
+        Mín. <strong>10 un.</strong> por sabor
+        <span class="sep">·</span>
+        <span class="selo">Especial</span> <strong>25 un.</strong> e <strong>2 dias</strong> de antecedência
+      </p>
+
+      <div class="repetir" id="repetir" hidden>
         <div>
-          <p class="sobretitulo">Para todo tipo de evento</p>
-          <h2 class="titulo-secao">Bolos e doces<br><span class="ouro">sob encomenda.</span></h2>
-          <p class="eventos-texto">Aniversários, casamentos, chás e eventos corporativos. Conte sua ideia e receba um orçamento personalizado.</p>
+          <strong>Repetir último pedido</strong>
+          <span id="repetir-resumo"></span>
         </div>
-        <a class="botao botao-ouro" id="link-orcamento" href="#" target="_blank" rel="noopener" data-magnetico>Pedir orçamento <span aria-hidden="true">→</span></a>
+        <button type="button" class="botao botao-contorno" id="repetir-botao">Repetir</button>
       </div>
-    </div>
-  </section>
 
-  <!-- RODAPÉ -->
-  <footer class="rodape">
-    <div class="container rodape-grade">
-      <div>
-        <span class="marca-nome">Cheiro de Pão</span>
-        <span class="marca-sub">Delicatessen</span>
-        <p class="rodape-frase">“Cheirinho de qualidade no ar”</p>
+      <div class="abas-faixa">
+        <div class="abas" id="abas" role="tablist" aria-label="Categorias">
+          <span class="aba-indicador" id="aba-indicador" aria-hidden="true"></span>
+        </div>
       </div>
-      <div>
-        <h4>Endereço</h4>
-        <p>Rua Grisógno Fernandes, nº 972<br>Cruz das Almas, BA</p>
-      </div>
-      <div>
-        <h4>Contato</h4>
-        <p><a href="https://instagram.com/cheirodepao.delicatessen" target="_blank" rel="noopener">@cheirodepao.delicatessen</a><br>
-          <a id="link-whats-rodape" href="#" target="_blank" rel="noopener">(75) 98241-9173</a><br>
-          <small>Atendimento por mensagem, não atendemos ligações.</small></p>
-      </div>
-    </div>
-  </footer>
+      <ul class="lista" id="lista"></ul>
+
+      <footer class="rodape">
+        <p>Rua Grisógno Fernandes, nº 972 · Cruz das Almas, BA</p>
+        <p>
+          <a href="https://instagram.com/cheirodepao.delicatessen" target="_blank" rel="noopener">@cheirodepao.delicatessen</a>
+          <span class="sep">·</span>
+          <a id="link-whats-rodape" href="#" target="_blank" rel="noopener">(75) 98241-9173</a>
+        </p>
+        <small>Atendimento por mensagem, não atendemos ligações.</small>
+      </footer>
+    </section>
+  </main>
 
   <!-- BARRA FLUTUANTE -->
   <div class="barra" id="barra" aria-hidden="true">
