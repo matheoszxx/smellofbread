@@ -7,7 +7,7 @@
   const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
   const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
   const fmt = (centavos) => moeda.format(centavos / 100);
-  const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
   const toque = matchMedia("(pointer: coarse)").matches;
   const reduzido = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -396,6 +396,8 @@
     $("#nome").value = estado.nome;
     $("#data").value = estado.data;
     $("#hora").value = estado.hora;
+    marcarVazio($("#data"));
+    marcarVazio($("#hora"));
     $("#obs").value = estado.obs;
 
     // Links de WhatsApp
@@ -408,6 +410,23 @@
   const marcarErro = (campo, msg) => {
     const el = document.querySelector(`[data-erro="${campo}"]`);
     if (el) el.textContent = msg || "";
+  };
+
+  // iPhone não mostra placeholder em data/hora vazias: um texto nosso aparece no lugar
+  const marcarVazio = (input) => input.parentElement.classList.toggle("vazio", !input.value);
+
+  // O Safari do iPhone ignora o "min" do calendário, então conferimos na hora da escolha
+  const conferirData = () => {
+    const input = $("#data");
+    if (!input.value || input.value >= dataMinima()) return;
+    const dias = antecedencia();
+    input.value = "";
+    estado.data = "";
+    marcarVazio(input);
+    salvar();
+    marcarErro("data", dias === 0
+      ? "Essa data já passou. Escolha a partir de hoje."
+      : `Este pedido precisa de ${dias} ${dias === 1 ? "dia" : "dias"} de antecedência. Escolha a partir de ${dataBR(dataMinima())}.`);
   };
 
   const validar = () => {
@@ -513,12 +532,14 @@
     if (t.id === "nome") { estado.nome = t.value; marcarErro("nome", ""); }
     if (t.id === "data") { estado.data = t.value; marcarErro("data", ""); }
     if (t.id === "hora") { estado.hora = t.value; marcarErro("data", ""); }
+    if (t.id === "data" || t.id === "hora") marcarVazio(t);
     if (t.id === "obs") estado.obs = t.value;
     if (t.name === "pagamento") { estado.pagamento = t.value; marcarErro("pagamento", ""); }
     salvar();
   });
   $("#form").addEventListener("change", (e) => {
     if (e.target.name === "pagamento") { estado.pagamento = e.target.value; marcarErro("pagamento", ""); salvar(); }
+    if (e.target.id === "data") conferirData();
   });
   $("#form").addEventListener("submit", (e) => e.preventDefault());
 
