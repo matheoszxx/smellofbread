@@ -138,7 +138,8 @@ function criarMateriais(tex) {
 const cor = (hex) => new THREE.Color(hex);
 
 // Pinta os vértices com um degradê vertical (base mais escura → topo)
-function pintar(geo, base, topo = base, variacao = 0.05) {
+// t0/t1: faixa da altura onde a cor passa de "base" para "topo" (0 = fundo, 1 = topo)
+function pintar(geo, base, topo = base, variacao = 0.05, t0 = 0, t1 = 1) {
   geo.computeBoundingBox();
   const b = geo.boundingBox;
   const ca = cor(base), cb = cor(topo), c = new THREE.Color();
@@ -146,8 +147,8 @@ function pintar(geo, base, topo = base, variacao = 0.05) {
   const arr = new Float32Array(pos.count * 3);
   const alt = b.max.y - b.min.y || 1;
   for (let i = 0; i < pos.count; i++) {
-    const t = (pos.getY(i) - b.min.y) / alt;
-    c.copy(ca).lerp(cb, t);
+    const t = Math.min(1, Math.max(0, ((pos.getY(i) - b.min.y) / alt - t0) / (t1 - t0)));
+    c.copy(ca).lerp(cb, t * t * (3 - 2 * t));
     const j = 1 + (Math.sin(pos.getX(i) * 37 + pos.getZ(i) * 53) * 0.5) * variacao;
     arr[i * 3] = c.r * j; arr[i * 3 + 1] = c.g * j; arr[i * 3 + 2] = c.b * j;
   }
@@ -473,9 +474,98 @@ function criarFormas() {
   F.sonhoDoceLeite = { mat: "acucar", geo: sonhoCom("#a8692e", "#c98a48") };
   F.sonhoChocolate = { mat: "acucar", geo: sonhoCom("#2e160b", "#4a2614") };
 
-  F.pao = { mat: "pao", geo: pintar(normalizar(new THREE.SphereGeometry(0.5, 32, 20).scale(1, 0.74, 1), 0.38), "#b5793a", "#e2ad60") };
+  // ---------- Pãezinhos ----------
+  // Corpo do pãozinho: base reta, laterais claras e altas, topo abaulado
+  const PERFIL_PAO = [
+    [0, 0], [0.4, 0], [0.47, 0.035], [0.5, 0.13], [0.505, 0.27], [0.47, 0.41],
+    [0.38, 0.52], [0.22, 0.585], [0, 0.6],
+  ];
+  // Altura do topo no raio r, interpolando o próprio contorno (para apoiar coberturas)
+  const TOPO_PAO = PERFIL_PAO.filter(([x, y]) => y >= 0.27).sort((a, b) => a[0] - b[0]);
+  const alturaPao = (r) => {
+    for (let i = 0; i < TOPO_PAO.length - 1; i++) {
+      const [r0, y0] = TOPO_PAO[i], [r1, y1] = TOPO_PAO[i + 1];
+      if (r <= r1) return y0 + (y1 - y0) * ((r - r0) / (r1 - r0)) + 0.012;
+    }
+    return 0.27;
+  };
+  const corpoPao = (lateral, topo, inicioTopo = 0.42) => {
+    const g = torno(PERFIL_PAO, 48);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const th = Math.atan2(z, x);
+      const f = 1 + 0.025 * Math.sin(th * 3 + 1) + 0.015 * Math.sin(th * 7);   // forma de pão feito à mão
+      p.setXYZ(i, x * f, y * (1 + 0.03 * Math.sin(th * 2)), z * f);
+    }
+    g.computeVertexNormals();
+    return pintar(g, lateral, topo, 0.05, inicioTopo, 0.75);
+  };
 
-  F.paoHotdog = { mat: "pao", geo: pintar(normalizar(capsula(0.17, 0.5), 0.5), "#b8803f", "#e3b062") };
+  // Queijo ralado espalhado por cima (lascas finas)
+  const ralado = (qtd, cores, raioMax, alcance = 0) => {
+    const partes = [];
+    for (let k = 0; k < qtd; k++) {
+      const r = Math.sqrt(Math.random()) * raioMax;
+      const a = Math.random() * PI * 2;
+      const y = alturaPao(r) + 0.004 + Math.random() * 0.014;
+      const lasca = new THREE.BoxGeometry(0.075 + Math.random() * 0.06, 0.012, 0.018);
+      lasca.rotateZ((Math.random() - 0.5) * 0.6 - (r / 0.5) * 0.5 * Math.cos(a));
+      lasca.rotateY(Math.random() * PI);
+      lasca.translate(Math.cos(a) * r, y + alcance * Math.random(), Math.sin(a) * r);
+      const sorte = Math.random();
+      const corL = sorte < 0.04 ? cores[cores.length - 1] : sorte < 0.35 ? cores[Math.min(1, cores.length - 1)] : cores[0];
+      partes.push(pintar(lasca, corL, corL, 0.06));
+    }
+    return partes;
+  };
+
+  // Gergelim no topo
+  const gergelimPao = (qtd, raioMax) => {
+    const partes = [];
+    for (let k = 0; k < qtd; k++) {
+      const r = Math.sqrt(Math.random()) * raioMax;
+      const a = Math.random() * PI * 2;
+      const s = new THREE.SphereGeometry(0.018, 6, 4).scale(1.7, 0.5, 1);
+      s.rotateY(Math.random() * PI);
+      s.translate(Math.cos(a) * r, alturaPao(r) + 0.003, Math.sin(a) * r);
+      partes.push(pintar(s, "#f2e6c8", "#f8efd9", 0.03));
+    }
+    return partes;
+  };
+
+  // Pãozinho (tradicional, peito de peru, atum, frango, sem recheio): topo dourado e brilhante
+  F.pao = { mat: "pao", geo: normalizar(corpoPao("#f1dca6", "#d6922f"), 0.4) };
+
+  // Pãozinho de parmesão: igual, com parmesão ralado por cima
+  F.paoParmesao = { mat: "pao", geo: normalizar(mergeGeometries([
+    corpoPao("#f1dca6", "#d9962f"), ...ralado(120, ["#f8f3e2"], 0.38),
+  ]), 0.4) };
+
+  // Pãozinho de queijo cuia: massa clara coberta de queijo cuia ralado (amarelo com pontinhos vermelhos)
+  F.paoCuia = { mat: "pao", geo: normalizar(mergeGeometries([
+    corpoPao("#f4e8cc", "#efdcb0", 0.5),
+    ...ralado(320, ["#eaa812", "#dc8f0a", "#c33a26"], 0.47, 0.03),
+  ]), 0.42) };
+
+  // Mini pão de hambúrguer: bola baixa e dourada com gergelim
+  F.paoHamburguer = { mat: "pao", geo: normalizar(mergeGeometries([
+    corpoPao("#efd9a6", "#d79c4a", 0.35), ...gergelimPao(22, 0.34),
+  ]), 0.4) };
+
+  // Mini pão de hot dog: pão alongado, topo marrom-dourado e laterais bem claras
+  {
+    const g = new THREE.SphereGeometry(1, 48, 28);
+    const p = g.attributes.position;
+    const sp = (v, e) => Math.sign(v) * Math.pow(Math.abs(v), e);
+    for (let i = 0; i < p.count; i++) {
+      let x = sp(p.getX(i), 0.3), y = sp(p.getY(i), 0.55), z = sp(p.getZ(i), 0.45);
+      if (y < 0) y *= 0.55;                                      // base mais reta
+      p.setXYZ(i, x * 0.5, y * 0.24, z * 0.27);
+    }
+    g.computeVertexNormals();
+    F.paoHotdog = { mat: "pao", geo: normalizar(pintar(g, "#f3e5c8", "#bf7e3c", 0.04, 0.5, 0.8), 0.5) };
+  }
 
   // Mini hambúrguer: pão, carne, queijo e pão
   {
