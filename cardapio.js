@@ -14,6 +14,17 @@ const CONFIG = {
   antecedenciaEspecial: 2,   // especiais: 2 dias de antecedência
   antecedenciaPadrao: 1,     // PRESSUPOSTO — confirmar com a loja
   passo: 5,                  // quanto o botão "+" soma depois de atingir o mínimo
+
+  // Doces: sem mínimo por sabor, sem antecedência, forminha inclusa
+  minimoDoce: 1,
+  inicialDoce: 10,           // o primeiro toque em "Adicionar" já coloca 10 (dá para digitar menos)
+  antecedenciaDoce: 0,
+
+  // Grupos do cardápio (chave no topo da lista)
+  grupos: [
+    { id: "salgados", nome: "Salgados", singular: "salgado", plural: "salgados" },
+    { id: "doces", nome: "Doces", singular: "doce", plural: "doces" },
+  ],
   entradaPercentual: 50,
 
   pagamentos: ["Pix", "Dinheiro", "Cartão de crédito"],
@@ -31,6 +42,7 @@ const CONFIG = {
 const CARDAPIO = [
   {
     id: "fritos",
+    grupo: "salgados",
     nome: "Fritos",
     itens: [
       { nome: "Banana real", forma: "bananaReal", preco: 1.4 },
@@ -51,6 +63,7 @@ const CARDAPIO = [
   },
   {
     id: "assados",
+    grupo: "salgados",
     nome: "Assados",
     itens: [
       { nome: "Esfirra de frango", forma: "esfirra", preco: 1.4 },
@@ -74,6 +87,7 @@ const CARDAPIO = [
   },
   {
     id: "paezinhos",
+    grupo: "salgados",
     nome: "Pãezinhos",
     itens: [
       { nome: "Pãozinho tradicional com recheio", forma: "pao", preco: 1.4 },
@@ -88,6 +102,49 @@ const CARDAPIO = [
       { nome: "Mini pão de hot dog", forma: "paoHotdog", preco: 0.5 },
       { nome: "Mini pão de hambúrguer", forma: "paoHamburguer", preco: 0.5 },
       { nome: "Mini hambúrguer", forma: "burger", preco: 2.5 },
+    ],
+  },
+  {
+    id: "gourmet",
+    grupo: "doces",
+    nome: "Gourmet",
+    itens: [
+      { nome: "Beijinho", forma: "beijinho", preco: 1.5 },
+      { nome: "Brigadeiro tradicional", forma: "brigadeiro", preco: 1.5 },
+      { nome: "Brigadeiro branco", forma: "brigadeiroBranco", preco: 1.6 },
+      { nome: "Brigadeiro gourmet", forma: "brigadeiroGourmet", preco: 1.8 },
+      { nome: "Bicho de pé", forma: "bichoDePe", preco: 1.5 },
+      { nome: "Bicho de pé com Nutella", forma: "bichoDePeNutella", preco: 1.8 },
+      { nome: "Casadinho", forma: "casadinho", preco: 1.5 },
+      { nome: "Cajuzinho", forma: "cajuzinho", preco: 1.7 },
+      { nome: "Churros", forma: "churros", preco: 1.8 },
+      { nome: "Ferrero Rocher", forma: "ferrero", preco: 1.8 },
+      { nome: "Ninho", forma: "ninho", preco: 1.5 },
+      { nome: "Ninho com Nutella", forma: "ninhoNutella", preco: 1.8 },
+      { nome: "Romeu e Julieta", forma: "romeuJulieta", preco: 1.8 },
+      { nome: "Ouriço de coco queimado", forma: "ourico", preco: 1.5 },
+      { nome: "Brigadeiro de amendoim", forma: "brigadeiroAmendoim", preco: 1.5 },
+    ],
+  },
+  {
+    id: "finos",
+    grupo: "doces",
+    nome: "Finos",
+    itens: [
+      { nome: "Bombom de amendoim", forma: "bombom", preco: 2.0 },
+      { nome: "Caixinha de cereja", forma: "caixinhaCereja", preco: 2.5 },
+      { nome: "Caixinha de morango", forma: "caixinhaMorango", preco: 3.5 },
+      { nome: "Camafeu de nozes", forma: "camafeu", preco: 2.5 },
+      { nome: "Coxinha de morango", forma: "coxinhaMorango", preco: 6.5 },
+      { nome: "Loló", forma: "lolo", preco: 2.0 },
+      { nome: "Morango coberto", forma: "morangoCoberto", preco: 7.0 },
+      { nome: "Trufa de ameixa", forma: "trufaAmeixa", preco: 2.5 },
+      { nome: "Trufa de chocolate", forma: "trufaChocolate", preco: 2.0 },
+      { nome: "Trufa de limão", forma: "trufaLimao", preco: 2.0 },
+      { nome: "Trufa de maracujá", forma: "trufaMaracuja", preco: 2.0 },
+      { nome: "Prestígio", forma: "prestigio", preco: 2.0 },
+      { nome: "Surpresa de uva", forma: "surpresaUva", preco: 2.0 },
+      { nome: "Uva coberta", forma: "uvaCoberta", preco: 3.0 },
     ],
   },
 ];

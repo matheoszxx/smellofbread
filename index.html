@@ -20,7 +20,7 @@
     <h1 class="marca">
       <img src="assets/logo.png" alt="Cheiro de Pão Delicatessen" width="640" height="346">
     </h1>
-    <a class="link-bolos" id="link-orcamento" href="#" target="_blank" rel="noopener">Bolos e doces</a>
+    <a class="link-bolos" id="link-orcamento" href="#" target="_blank" rel="noopener">Bolos sob encomenda</a>
   </header>
 
   <main class="app">
@@ -29,8 +29,8 @@
       <div class="palco" id="bandeja">
         <canvas class="cena" id="cena-bandeja" aria-hidden="true"></canvas>
         <div class="palco-vazio" id="bandeja-vazia">
-          <strong>Monte sua bandeja</strong>
-          <span>Toque em <em>Adicionar</em> e veja os salgados chegando.</span>
+          <strong id="vazio-titulo">Monte sua bandeja</strong>
+          <span>Toque em <em>Adicionar</em> e <span id="vazio-resto">veja os salgados chegando.</span></span>
         </div>
         <div class="palco-rodape">
           <span class="chip" id="bandeja-qtd"></span>
@@ -41,12 +41,8 @@
     </div>
 
     <!-- Cardápio -->
-    <section class="cardapio" aria-label="Cardápio de salgados">
-      <p class="regras">
-        Mín. <strong>10 un.</strong> por sabor
-        <span class="sep">·</span>
-        <span class="selo">Especial</span> <strong>25 un.</strong> e <strong>2 dias</strong> de antecedência
-      </p>
+    <section class="cardapio" aria-label="Cardápio">
+      <p class="regras" id="regras"></p>
 
       <div class="repetir" id="repetir" hidden>
         <div>
@@ -57,6 +53,7 @@
       </div>
 
       <div class="abas-faixa">
+        <div class="grupos" id="grupos" role="tablist" aria-label="Salgados ou doces"></div>
         <div class="abas" id="abas" role="tablist" aria-label="Categorias">
           <span class="aba-indicador" id="aba-indicador" aria-hidden="true"></span>
         </div>

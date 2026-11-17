@@ -616,11 +616,510 @@ function quandoVisivel(el, aoMudar) {
 const amortecer = (atual, alvo, velocidade, dt) => atual + (alvo - atual) * (1 - Math.exp(-velocidade * dt));
 
 // ---------------------------------------------------------
-// BANDEJA: tábua de madeira 3D.
-// Vazia: vitrine com a coxinha e salgados flutuando.
-// Com pedido: recebe uma peça para cada porção escolhida.
+// DOCES: texturas, materiais e modelos (todos dentro de forminha)
+// Medidas: forminha com 0,2 de raio no topo e 0,12 de altura;
+// a bolinha do doce tem ~0,165 de raio, com centro em y = 0,15.
 // ---------------------------------------------------------
-function cenaBandeja(canvas, container, formas, mats, tex) {
+function criarTexturasDoces() {
+  const granulado = texturaCanvas(256, (g, s) => {
+    g.fillStyle = "#ffffff"; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 1100; i++) {
+      const v = 70 + Math.random() * 50;
+      g.fillStyle = `rgb(${v},${v},${v})`;
+      g.save();
+      g.translate(Math.random() * s, Math.random() * s);
+      g.rotate(Math.random() * PI);
+      g.fillRect(-3.5, -1, 7, 2.2);
+      g.restore();
+    }
+  });
+  granulado.repeat.set(3, 2);
+  granulado.colorSpace = THREE.SRGBColorSpace;
+
+  const coco = texturaCanvas(256, (g, s) => {
+    g.fillStyle = "#ffffff"; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 1400; i++) {
+      const v = 175 + Math.random() * 60;
+      g.strokeStyle = `rgb(${v},${v},${v})`;
+      g.lineWidth = 1 + Math.random() * 1.6;
+      const x = Math.random() * s, y = Math.random() * s, a = Math.random() * PI;
+      g.beginPath();
+      g.moveTo(x, y);
+      g.quadraticCurveTo(x + Math.cos(a) * 4, y + Math.sin(a) * 4 + 2, x + Math.cos(a) * 8, y + Math.sin(a) * 8);
+      g.stroke();
+    }
+  });
+  coco.repeat.set(3, 2);
+  coco.colorSpace = THREE.SRGBColorSpace;
+
+  // Mármore claro com veios
+  const marmore = texturaCanvas(1024, (g, s) => {
+    const grad = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    grad.addColorStop(0, "#f7f4ee");
+    grad.addColorStop(1, "#e9e3d8");
+    g.fillStyle = grad; g.fillRect(0, 0, s, s);
+    g.filter = "blur(1.2px)";
+    for (let k = 0; k < 26; k++) {
+      g.strokeStyle = `rgba(${150 + Math.random() * 40},${140 + Math.random() * 35},${125 + Math.random() * 30},${0.15 + Math.random() * 0.35})`;
+      g.lineWidth = 0.6 + Math.random() * 2.2;
+      g.beginPath();
+      let x = Math.random() * s, y = Math.random() * s;
+      g.moveTo(x, y);
+      for (let p = 0; p < 6; p++) {
+        const nx = x + (Math.random() - 0.3) * 260, ny = y + (Math.random() - 0.5) * 200;
+        g.quadraticCurveTo(x + (Math.random() - 0.5) * 160, y + (Math.random() - 0.5) * 160, nx, ny);
+        x = nx; y = ny;
+      }
+      g.stroke();
+    }
+    g.filter = "none";
+  });
+  marmore.wrapS = marmore.wrapT = THREE.ClampToEdgeWrapping;
+  marmore.colorSpace = THREE.SRGBColorSpace;
+  marmore.anisotropy = 8;
+
+  return { granulado, coco, marmore };
+}
+
+function criarMateriaisDoces(tex, texDoces) {
+  return {
+    granulado: new THREE.MeshStandardMaterial({ vertexColors: true, map: texDoces.granulado, bumpMap: texDoces.granulado, bumpScale: 1.4, roughness: 0.7 }),
+    coco: new THREE.MeshStandardMaterial({ vertexColors: true, map: texDoces.coco, bumpMap: texDoces.coco, bumpScale: 2.2, roughness: 0.9 }),
+    acucarDoce: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, bumpMap: tex.acucar, bumpScale: 1.4 }),
+    po: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, bumpMap: tex.acucar, bumpScale: 0.5 }),
+    brilho: new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.12 }),
+    crocante: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, bumpMap: tex.empanado, bumpScale: 3 }),
+    forminha: new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.75, roughness: 0.32, side: THREE.DoubleSide }),
+  };
+}
+
+function criarDoces() {
+  const D = {};
+  const Y0 = 0.15;          // centro da bolinha
+  const RB = 0.165;         // raio da bolinha
+  const TOPO = Y0 + RB;     // topo da bolinha
+
+  const bola = (cor1, cor2, r = RB, sy = 1) =>
+    pintar(new THREE.SphereGeometry(r, 30, 20).scale(1, sy, 1).translate(0, Y0, 0), cor1, cor2, 0.04);
+  const pingo = (cor, r = 0.06) =>
+    pintar(new THREE.SphereGeometry(r, 16, 10).scale(1, 0.6, 1).translate(0, TOPO - 0.005, 0), cor, cor, 0.03);
+  const juntar = (...g) => mergeGeometries(g);
+  const def = (nome, mat, geo) => { geo.computeBoundingBox(); D[nome] = { mat, geo, altura: geo.boundingBox.max.y }; };
+
+  // Forminha plissada (usada por baixo de todos os doces)
+  {
+    const lado = new THREE.CylinderGeometry(0.205, 0.15, 0.12, 96, 3, true).translate(0, 0.06, 0);
+    const p = lado.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const th = Math.atan2(z, x);
+      const f = 1 + 0.06 * Math.abs(Math.sin(th * 18)) * (0.4 + y / 0.12);   // pregas que abrem para cima
+      p.setXYZ(i, x * f, y, z * f);
+    }
+    lado.computeVertexNormals();
+    pintar(lado, "#9a6f2c", "#d2a650", 0.05);
+    const fundo = pintar(new THREE.CircleGeometry(0.15, 40).rotateX(-PI / 2).translate(0, 0.002, 0), "#8a6226", "#8a6226", 0.02);
+    D.forminha = { mat: "forminha", geo: juntar(lado, fundo) };
+  }
+
+  // ---------- Gourmet ----------
+  def("brigadeiro", "granulado", bola("#3a1a0c", "#4c2613"));
+  def("brigadeiroGourmet", "granulado", bola("#261006", "#3a1b0c", 0.172));
+  def("brigadeiroBranco", "granulado", bola("#efe4cc", "#f8f1e2"));
+  def("brigadeiroAmendoim", "crocante", bola("#a8703c", "#c48d52"));
+
+  {
+    const cravo = pintar(juntar(
+      new THREE.CylinderGeometry(0.012, 0.009, 0.06, 8).translate(0, TOPO + 0.02, 0),
+      new THREE.SphereGeometry(0.02, 8, 6).translate(0, TOPO + 0.055, 0),
+    ), "#2e190d", "#3b2214", 0.02);
+    def("beijinho", "coco", juntar(bola("#f2ece0", "#fbf8f1"), cravo));
+  }
+
+  def("bichoDePe", "acucarDoce", bola("#d9748f", "#ef9db4"));
+  def("bichoDePeNutella", "acucarDoce", juntar(bola("#d9748f", "#ef9db4"), pingo("#3a1c0e")));
+  def("ninho", "po", bola("#efe8d8", "#fbf8f0"));
+  def("ninhoNutella", "po", juntar(bola("#efe8d8", "#fbf8f0"), pingo("#3a1c0e")));
+
+  {
+    // Casadinho: metade branca, metade chocolate
+    const g = bola("#ffffff", "#ffffff");
+    const p = g.attributes.position, c = g.attributes.color;
+    const branco = cor("#f1e9d6"), choco = cor("#3c1b0d");
+    for (let i = 0; i < p.count; i++) {
+      const k = THREE.MathUtils.smoothstep(p.getX(i), -0.01, 0.01);
+      const cc = branco.clone().lerp(choco, k);
+      c.setXYZ(i, cc.r, cc.g, cc.b);
+    }
+    def("casadinho", "po", g);
+  }
+
+  {
+    // Cajuzinho: formato de caju com amendoim no topo
+    const corpo = torno([[0, 0], [0.11, 0.02], [0.15, 0.09], [0.14, 0.18], [0.1, 0.26], [0.05, 0.31], [0, 0.33]], 32)
+      .translate(0, 0.02, 0);
+    pintar(corpo, "#a85a28", "#c8773c", 0.05);
+    const amendoim = pintar(new THREE.SphereGeometry(0.035, 12, 8).scale(1.5, 0.75, 1).translate(0, 0.36, 0), "#c9934f", "#e0b06a", 0.04);
+    def("cajuzinho", "acucarDoce", juntar(corpo, amendoim));
+  }
+
+  def("churros", "acucarDoce", juntar(bola("#a87a4c", "#c39566"), pingo("#9c5a24", 0.065)));
+
+  {
+    const avela = pintar(new THREE.SphereGeometry(0.042, 14, 10).scale(1, 0.85, 1).translate(0, TOPO + 0.015, 0), "#8a5528", "#a96a34", 0.05);
+    def("ferrero", "crocante", juntar(bola("#4a2a14", "#6a4020"), avela));
+  }
+
+  {
+    const goiabada = pintar(new THREE.BoxGeometry(0.075, 0.035, 0.075, 2, 1, 2).translate(0, TOPO + 0.005, 0), "#8e1a17", "#a8261f", 0.03);
+    def("romeuJulieta", "po", juntar(bola("#f0e2bd", "#f8efd6"), goiabada));
+  }
+
+  def("ourico", "coco", bola("#9c6630", "#c08a4c"));
+
+  // ---------- Finos ----------
+  const CHOCO = ["#24100a", "#36190d"];
+
+  {
+    const cupula = new THREE.SphereGeometry(0.175, 30, 16, 0, PI * 2, 0, PI / 2).scale(1, 0.95, 1).translate(0, 0.07, 0);
+    const base = new THREE.CylinderGeometry(0.175, 0.17, 0.07, 30).translate(0, 0.035, 0);
+    pintar(cupula, ...CHOCO); pintar(base, ...CHOCO);
+    const amendoim = pintar(new THREE.SphereGeometry(0.035, 12, 8).scale(1.5, 0.75, 1).translate(0, 0.245, 0), "#c9934f", "#e0b06a", 0.04);
+    def("bombom", "brilho", juntar(cupula, base, amendoim));
+  }
+
+  // Copinho de chocolate (caixinhas)
+  const copinho = () => pintar(torno([
+    [0, 0.02], [0.14, 0.02], [0.175, 0.2], [0.155, 0.205], [0.125, 0.045], [0, 0.045],
+  ], 40), ...CHOCO);
+  const folhas = (y, r = 0.05, n = 5) => {
+    const partes = [];
+    for (let k = 0; k < n; k++) {
+      const f = new THREE.ConeGeometry(0.022, r, 6).scale(1, 1, 0.35).translate(0, r / 2, 0);
+      f.rotateZ(PI / 2 - 0.35);
+      f.rotateY((k / n) * PI * 2);
+      f.translate(0, y, 0);
+      partes.push(pintar(f, "#2f6a1f", "#4f8f2c", 0.04));
+    }
+    return partes;
+  };
+
+  {
+    const cereja = pintar(new THREE.SphereGeometry(0.075, 18, 12).translate(0, 0.22, 0), "#6e0b12", "#a8121e", 0.03);
+    const cabo = pintar(new THREE.CylinderGeometry(0.006, 0.006, 0.1, 6).rotateZ(0.3).translate(0.015, 0.33, 0), "#4a5a1c", "#5d7022", 0.02);
+    def("caixinhaCereja", "brilho", juntar(copinho(), cereja, cabo));
+  }
+
+  // Morango (ponta para baixo)
+  const morango = (escala, chocolateAte) => {
+    const g = torno([[0, 0], [0.05, 0.02], [0.11, 0.09], [0.145, 0.18], [0.14, 0.26], [0.09, 0.31], [0, 0.32]], 36);
+    g.scale(escala, escala, escala);
+    if (chocolateAte) pintar(g, CHOCO[0], "#c0122a", 0.04, chocolateAte, chocolateAte + 0.05);
+    else pintar(g, "#a80f22", "#d0162e", 0.04);
+    return g;
+  };
+
+  {
+    const m = morango(0.62).translate(0, 0.17, 0);
+    def("caixinhaMorango", "brilho", juntar(copinho(), m, ...folhas(0.17 + 0.32 * 0.62, 0.045)));
+  }
+
+  {
+    const m = morango(1.05, 0.62).translate(0, 0.03, 0);
+    def("morangoCoberto", "brilho", juntar(m, ...folhas(0.03 + 0.32 * 1.05, 0.07, 6)));
+  }
+
+  {
+    const fondant = pintar(new THREE.SphereGeometry(0.175, 30, 18).scale(1, 0.62, 0.8).translate(0, 0.12, 0), "#eee3cc", "#faf4e8", 0.03);
+    const noz = new THREE.SphereGeometry(0.065, 16, 10, 0, PI * 2, 0, PI / 2).scale(1.3, 0.55, 0.95);
+    const p = noz.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const f = 1 + 0.12 * Math.sin(p.getX(i) * 120) * Math.sin(p.getZ(i) * 90);  // rugas da noz
+      p.setY(i, p.getY(i) * f);
+    }
+    noz.computeVertexNormals();
+    noz.translate(0, 0.225, 0);
+    pintar(noz, "#6e4220", "#9a6234", 0.08);
+    def("camafeu", "brilho", juntar(fondant, noz));
+  }
+
+  {
+    // Coxinha de morango: brigadeiro em formato de coxinha com folhinha de morango
+    const corpo = torno([[0, 0], [0.13, 0.01], [0.17, 0.07], [0.16, 0.16], [0.12, 0.25], [0.07, 0.33], [0.03, 0.38], [0, 0.4]], 36)
+      .translate(0, 0.02, 0);
+    pintar(corpo, "#2a1208", "#3e1d0d", 0.04);
+    def("coxinhaMorango", "granulado", juntar(corpo, ...folhas(0.42, 0.045)));
+  }
+
+  const trufa = (corFio) => {
+    const corpo = bola(...CHOCO, 0.168, 0.95);
+    const fio = pintar(new THREE.TorusGeometry(0.1, 0.012, 8, 40).rotateX(PI / 2).translate(0, TOPO - 0.03, 0), corFio, corFio, 0.02);
+    const fio2 = pintar(new THREE.TorusGeometry(0.05, 0.011, 8, 30).rotateX(PI / 2).translate(0, TOPO - 0.008, 0), corFio, corFio, 0.02);
+    return juntar(corpo, fio, fio2);
+  };
+  def("trufaChocolate", "brilho", trufa("#6b3a1c"));
+  def("trufaAmeixa", "brilho", trufa("#6a2442"));
+  def("trufaLimao", "brilho", trufa("#a6cf3e"));
+  def("trufaMaracuja", "brilho", trufa("#f0b21c"));
+  def("lolo", "brilho", trufa("#f1e6d0"));
+
+  {
+    const partes = [bola(...CHOCO, 0.168)];
+    for (let k = 0; k < 16; k++) {
+      const a = Math.random() * PI * 2, r = Math.random() * 0.1;
+      const lasca = new THREE.BoxGeometry(0.03, 0.006, 0.01);
+      lasca.rotateY(Math.random() * PI);
+      lasca.translate(Math.cos(a) * r, TOPO - 0.01 + (0.1 - r) * 0.05, Math.sin(a) * r);
+      partes.push(pintar(lasca, "#f7f2e6", "#ffffff", 0.02));
+    }
+    def("prestigio", "brilho", juntar(...partes));
+  }
+
+  {
+    const uva = pintar(new THREE.SphereGeometry(0.06, 16, 12).scale(1, 1.1, 1).translate(0, TOPO + 0.005, 0), "#7ea630", "#a6c94a", 0.03);
+    def("surpresaUva", "po", juntar(bola("#f1e8d4", "#faf5ea"), uva));
+  }
+
+  {
+    const uva = pintar(new THREE.SphereGeometry(0.14, 28, 20).scale(1, 1.15, 1).translate(0, 0.17, 0), CHOCO[0], "#9cc43c", 0.03, 0.55, 0.6);
+    def("uvaCoberta", "brilho", uva);
+  }
+
+  return D;
+}
+
+// ---------------------------------------------------------
+// BANDEJAS 3D: uma para salgados (tábua de madeira) e outra para
+// doces (prato de mármore com borda dourada). Só uma aparece por vez.
+// Vazia: vitrine com itens flutuando. Com pedido: uma peça por porção.
+// ---------------------------------------------------------
+const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; };
+
+// Salgados: amontoados em espiral, do centro para fora
+function layoutEspiral(N, R) {
+  const passo = Math.min(0.42, (R - 0.55) / Math.sqrt(N + 0.6));
+  const pontos = [];
+  for (let i = 0; i < N; i++) {
+    const r = passo * Math.sqrt(i + 0.6), a = i * 2.39996323;
+    pontos.push(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
+  }
+  return { pontos, escala: 1 };
+}
+
+// Doces: enfileirados em grade, como numa mesa de festa
+function layoutGrade(N, R) {
+  const IDEAL = 0.66;
+  let s = IDEAL, pts = [];
+  for (; s > 0.2; s -= 0.02) {
+    pts = [];
+    const lim = R - 0.42;
+    const n = Math.ceil(lim / s) + 1;
+    for (let j = -n; j <= n; j++) {
+      for (let i = -n; i <= n; i++) {
+        const x = (i + (j % 2 ? 0.5 : 0)) * s, z = j * s * 0.866;
+        if (Math.hypot(x, z) <= lim) pts.push(new THREE.Vector3(x, 0, z));
+      }
+    }
+    if (pts.length >= N) break;
+  }
+  pts.sort((a, b) => (a.length() - b.length()) || (Math.atan2(a.z, a.x) - Math.atan2(b.z, b.x)));
+  return { pontos: pts.slice(0, N), escala: Math.min(1, s / IDEAL) };
+}
+
+function criarMesa(cfg) {
+  const { R, formas, mats, escalaPeca, layout, inclinacaoMax, vitrineItens, escalaVitrine, base, extra, corParticula } = cfg;
+  const alturas = cfg.alturasVitrine || { interno: 1.6, externo: [0.75, 1.1] };
+
+  const raiz = new THREE.Group();     // entra/sai quando troca salgados/doces
+  const giro = new THREE.Group();     // gira com o tempo e com o arraste
+  raiz.add(giro);
+  giro.add(base);
+
+  // Vitrine
+  const vitrine = new THREE.Group();
+  giro.add(vitrine);
+  const montarPeca = (nome, escala) => {
+    const g = new THREE.Group();
+    const f = formas[nome];
+    const m = new THREE.Mesh(f.geo, mats[f.mat]);
+    m.castShadow = true;
+    g.add(m);
+    if (extra) {
+      const e = new THREE.Mesh(extra.geo, mats[extra.mat]);
+      e.castShadow = true;
+      g.add(e);
+    }
+    g.children.forEach((c) => { c.scale.setScalar(escala); c.position.y = -f.altura * escala * 0.5; });
+    return g;
+  };
+  const anelInterno = vitrineItens.interno.map((nome, i, arr) => [nome, 0.9, alturas.interno, (i / arr.length) * PI * 2, -1]);
+  const anelExterno = vitrineItens.externo.map((nome, i, arr) => [nome, 1.95, alturas.externo[i % 2], (i / arr.length) * PI * 2 + PI / arr.length, 1]);
+  const satelites = [...anelInterno, ...anelExterno].map(([nome, raio, y, fase, sentido]) => {
+    const g = montarPeca(nome, escalaVitrine);
+    vitrine.add(g);
+    return {
+      g, raio, y, fase, sentido,
+      giroY: Math.random() * PI * 2,
+      velGiro: 0.35 + Math.random() * 0.3,
+      inclX: (Math.random() - 0.5) * 0.5 * (inclinacaoMax / 0.25),
+      inclZ: (Math.random() - 0.5) * 0.4 * (inclinacaoMax / 0.25),
+    };
+  });
+
+  const NP = toque ? 90 : 160;
+  const posP = new Float32Array(NP * 3);
+  const velP = new Float32Array(NP);
+  for (let i = 0; i < NP; i++) {
+    const a = Math.random() * PI * 2, r = Math.random() * 3.2;
+    posP[i * 3] = Math.cos(a) * r;
+    posP[i * 3 + 1] = Math.random() * 3.4;
+    posP[i * 3 + 2] = Math.sin(a) * r;
+    velP[i] = 0.1 + Math.random() * 0.25;
+  }
+  const geoP = new THREE.BufferGeometry();
+  geoP.setAttribute("position", new THREE.BufferAttribute(posP, 3));
+  const matP = new THREE.PointsMaterial({
+    size: 0.05, map: cfg.texBrilho, color: corParticula, transparent: true, opacity: 0.7,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  });
+  vitrine.add(new THREE.Points(geoP, matP));
+
+  // Peças do pedido (uma malha instanciada por forma)
+  const CAP = 180;
+  const novaMalha = (f) => {
+    const m = new THREE.InstancedMesh(f.geo, mats[f.mat], CAP);
+    m.count = 0;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    m.frustumCulled = false;
+    m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    m.setColorAt(0, new THREE.Color(1, 1, 1));
+    m.userData.indice = [];
+    giro.add(m);
+    return m;
+  };
+  const malhas = {};
+  for (const [nome, f] of Object.entries(formas)) if (nome !== "forminha") malhas[nome] = novaMalha(f);
+  const malhaExtra = extra ? novaMalha(extra) : null;
+  const todasMalhas = [...Object.values(malhas), ...(malhaExtra ? [malhaExtra] : [])];
+
+  const pecas = new Map();
+  let itensInfo = {};
+  let alvoPresenca = 1, presenca = 1, escalaLayout = 1;
+
+  function atualizar({ itens }, instantaneo = false) {
+    itensInfo = Object.fromEntries(itens.map((i) => [i.id, i]));
+    alvoPresenca = itens.length ? 0 : 1;
+    if (instantaneo) presenca = alvoPresenca;
+
+    const desejadas = [];
+    itens.forEach((it) => { for (let k = 0; k < it.pecas; k++) desejadas.push({ chave: `${it.id}#${k}`, item: it }); });
+    const { pontos, escala } = layout(desejadas.length, R);
+    escalaLayout = escala;
+    const vivas = new Set();
+    const atrasoBase = presenca > 0.5 && !instantaneo ? 0.35 : 0;
+    let novas = 0;
+
+    desejadas.forEach(({ chave, item }, i) => {
+      vivas.add(chave);
+      const h = hash(chave);
+      const alvo = pontos[i];
+      let p = pecas.get(chave);
+      if (!p || p.saindo) {
+        const semAnimacao = reduzido || instantaneo;
+        p = {
+          chave, id: item.id, forma: item.forma,
+          pos: alvo.clone().add(new THREE.Vector3(0, semAnimacao ? 0 : 2.6 + h * 1.2, 0)),
+          vy: 0, escala: semAnimacao ? 1 : 0.001, alvoEscala: 1,
+          atraso: semAnimacao ? 0 : atrasoBase + Math.min(novas, 30) * 0.035,
+          giro: h * PI * 2, inclinacao: (h - 0.5) * inclinacaoMax, rodando: (h - 0.5) * 6,
+          caindo: !semAnimacao, saindo: false, alvo: alvo.clone(),
+        };
+        novas++;
+        pecas.set(chave, p);
+      }
+      p.alvo.copy(alvo);
+    });
+    pecas.forEach((p) => { if (!vivas.has(p.chave) && !p.saindo) { p.saindo = true; p.alvoEscala = 0; } });
+  }
+
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), eul = new THREE.Euler(), esc = new THREE.Vector3();
+  const corNormal = new THREE.Color(1, 1, 1), corApagada = new THREE.Color(0.38, 0.33, 0.3);
+
+  function quadro(dt, t, vel, destaque) {
+    presenca = amortecer(presenca, alvoPresenca, alvoPresenca ? 3 : 6, dt);
+    const ease = presenca * presenca * (3 - 2 * presenca);
+    vitrine.visible = presenca > 0.01;
+    if (vitrine.visible) {
+      vitrine.scale.setScalar(Math.max(ease, 0.001));
+      vitrine.position.y = (1 - ease) * 1.4;
+      matP.opacity = 0.7 * ease;
+      satelites.forEach((s) => {
+        const a = s.fase + t * 0.18 * s.sentido;
+        s.g.position.set(Math.cos(a) * s.raio, s.y + Math.sin(t * 0.9 + s.fase * 2) * 0.1, Math.sin(a) * s.raio);
+        s.giroY += dt * s.velGiro * vel;
+        s.g.rotation.set(s.inclX + Math.sin(t * 0.8 + s.fase) * 0.18 * (inclinacaoMax / 0.25), s.giroY, s.inclZ + Math.cos(t * 0.7 + s.fase) * 0.12 * (inclinacaoMax / 0.25));
+      });
+      const p = geoP.attributes.position;
+      for (let i = 0; i < NP; i++) {
+        let y = p.getY(i) + velP[i] * dt * vel;
+        if (y > 3.6) y = 0;
+        p.setY(i, y);
+      }
+      p.needsUpdate = true;
+    }
+
+    todasMalhas.forEach((m) => { m.count = 0; m.userData.indice.length = 0; });
+    for (const p of pecas.values()) {
+      if (p.atraso > 0) { p.atraso -= dt; continue; }
+      const elevar = destaque && p.id === destaque ? 0.16 : 0;
+      p.pos.x = amortecer(p.pos.x, p.alvo.x, 7, dt);
+      p.pos.z = amortecer(p.pos.z, p.alvo.z, 7, dt);
+      if (p.caindo) {
+        p.vy -= 22 * dt;
+        p.pos.y += p.vy * dt;
+        if (p.pos.y <= 0) {
+          p.pos.y = 0;
+          p.vy = -p.vy * 0.32;
+          if (p.vy < 0.6) { p.caindo = false; p.vy = 0; }
+        }
+        p.rodando = amortecer(p.rodando, 0, 2, dt);
+        p.giro += p.rodando * dt;
+      } else {
+        p.pos.y = amortecer(p.pos.y, elevar, 10, dt);
+      }
+      p.escala = amortecer(p.escala, p.alvoEscala, p.saindo ? 10 : 14, dt);
+      if (p.saindo && p.escala < 0.02) { pecas.delete(p.chave); continue; }
+
+      const m = malhas[p.forma];
+      if (!m || m.count >= CAP) continue;
+      eul.set(p.inclinacao, p.giro, p.inclinacao * 0.5);
+      q.setFromEuler(eul);
+      esc.setScalar(Math.max(p.escala, 0.001) * escalaPeca * escalaLayout);
+      m4.compose(p.pos, q, esc);
+      const corP = destaque && p.id !== destaque ? corApagada : corNormal;
+      for (const alvoM of malhaExtra ? [m, malhaExtra] : [m]) {
+        alvoM.setMatrixAt(alvoM.count, m4);
+        alvoM.setColorAt(alvoM.count, corP);
+        alvoM.userData.indice[alvoM.count] = p.chave;
+        alvoM.count++;
+      }
+    }
+    todasMalhas.forEach((m) => {
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    });
+    return ease;
+  }
+
+  return {
+    raiz, giro, R, atualizar, quadro, pecas,
+    get itensInfo() { return itensInfo; },
+    malhasVisiveis: () => todasMalhas.filter((m) => m.count > 0),
+  };
+}
+
+function cenaBandeja(canvas, container, formas, mats, tex, doces, matsDoces, texDoces) {
   const renderer = criarRenderizador(canvas, true);
   const cena = new THREE.Scene();
   cena.environment = ambiente(renderer);
@@ -642,143 +1141,68 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   contra2.position.set(4, 1, -4);
   cena.add(chave, contra, contra2, new THREE.HemisphereLight("#ffe9cc", "#1d0e05", 0.45));
 
-  const mesa = new THREE.Group();
-  cena.add(mesa);
-
-  // Tábua redonda
-  const R = 2.6;
-  const ESCALA_PECA = 1.6;
-  const matTopo = new THREE.MeshStandardMaterial({ map: tex.madeira, color: "#9c8270", roughness: 0.62, metalness: 0, bumpMap: tex.madeira, bumpScale: 1.2 });
-  const matLado = new THREE.MeshStandardMaterial({ map: tex.casca, roughness: 0.95, color: "#8a6a55" });
-  const tabua = new THREE.Mesh(new THREE.CylinderGeometry(R, R * 0.97, 0.26, 128, 1), [matLado, matTopo, matLado]);
-  tabua.position.y = -0.13;
-  tabua.receiveShadow = true;
-  mesa.add(tabua);
-
   const sombra = new THREE.Mesh(
-    new THREE.CircleGeometry(R * 1.25, 64),
+    new THREE.CircleGeometry(2.6 * 1.25, 64),
     new THREE.MeshBasicMaterial({ map: tex.brilho, color: "#000000", transparent: true, opacity: 0.55, depthWrite: false })
   );
   sombra.rotation.x = -PI / 2;
   sombra.position.y = -0.27;
   cena.add(sombra);
 
-  // ---------- Vitrine (bandeja vazia) ----------
-  const vitrine = new THREE.Group();
-  mesa.add(vitrine);
+  // ---------- Tábua de madeira (salgados) ----------
+  const R = 2.6;
+  const tabua = new THREE.Mesh(new THREE.CylinderGeometry(R, R * 0.97, 0.26, 128, 1), [
+    new THREE.MeshStandardMaterial({ map: tex.casca, roughness: 0.95, color: "#8a6a55" }),
+    new THREE.MeshStandardMaterial({ map: tex.madeira, color: "#9c8270", roughness: 0.62, metalness: 0, bumpMap: tex.madeira, bumpScale: 1.2 }),
+    new THREE.MeshStandardMaterial({ map: tex.casca, roughness: 0.95, color: "#8a6a55" }),
+  ]);
+  tabua.position.y = -0.13;
+  tabua.receiveShadow = true;
 
-  // Salgados mais fiéis à realidade, todos do mesmo tamanho, flutuando em dois anéis
-  // [forma, raio, altura, fase, sentido do anel]
-  const ESC_VITRINE = 2.1;
-  const anelInterno = ["coxinha", "paoCuia", "pastel", "enroladinhoSalsicha"]
-    .map((nome, i) => [nome, 0.9, 1.6, (i / 4) * PI * 2, -1]);
-  const anelExterno = ["camarao", "paoParmesao", "saltenha", "sonhoGoiabada", "risole", "bananaReal"]
-    .map((nome, i) => [nome, 1.95, i % 2 ? 1.1 : 0.75, (i / 6) * PI * 2 + PI / 6, 1]);
-
-  const satelites = [...anelInterno, ...anelExterno].map(([nome, raio, y, fase, sentido]) => {
-    const f = formas[nome];
-    const m = new THREE.Mesh(f.geo, mats[f.mat]);
-    m.scale.setScalar(ESC_VITRINE);
-    m.position.y = -f.altura * ESC_VITRINE * 0.5;
-    m.castShadow = true;
-    const g = new THREE.Group();
-    g.add(m);
-    vitrine.add(g);
-    return {
-      g, raio, y, fase, sentido,
-      giroY: Math.random() * PI * 2,
-      velGiro: 0.35 + Math.random() * 0.3,
-      inclX: (Math.random() - 0.5) * 0.5,
-      inclZ: (Math.random() - 0.5) * 0.4,
-    };
-  });
-
-  // Partículas douradas
-  const NP = toque ? 90 : 160;
-  const posP = new Float32Array(NP * 3);
-  const velP = new Float32Array(NP);
-  for (let i = 0; i < NP; i++) {
-    const a = Math.random() * PI * 2, r = Math.random() * 3.2;
-    posP[i * 3] = Math.cos(a) * r;
-    posP[i * 3 + 1] = Math.random() * 3.4;
-    posP[i * 3 + 2] = Math.sin(a) * r;
-    velP[i] = 0.1 + Math.random() * 0.25;
-  }
-  const geoP = new THREE.BufferGeometry();
-  geoP.setAttribute("position", new THREE.BufferAttribute(posP, 3));
-  const matP = new THREE.PointsMaterial({
-    size: 0.05, map: tex.brilho, color: "#f4cf8a", transparent: true, opacity: 0.7,
-    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
-  });
-  vitrine.add(new THREE.Points(geoP, matP));
-
-  // ---------- Peças do pedido ----------
-  const CAP = 180;
-  const malhas = {};
-  for (const [nome, f] of Object.entries(formas)) {
-    const m = new THREE.InstancedMesh(f.geo, mats[f.mat], CAP);
-    m.count = 0;
-    m.castShadow = true;
-    m.receiveShadow = true;
-    m.frustumCulled = false;
-    m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    m.setColorAt(0, new THREE.Color(1, 1, 1));
-    m.userData.indice = [];
-    malhas[nome] = m;
-    mesa.add(m);
+  // ---------- Prato de mármore com borda dourada (doces) ----------
+  const RD = 2.55;
+  const prato = new THREE.Group();
+  {
+    const ouro = new THREE.MeshStandardMaterial({ color: "#d6a84e", metalness: 1, roughness: 0.26 });
+    const disco = new THREE.Mesh(new THREE.CylinderGeometry(RD, RD * 0.96, 0.14, 128, 1), [
+      ouro,
+      new THREE.MeshPhysicalMaterial({ map: texDoces.marmore, roughness: 0.28, clearcoat: 0.8, clearcoatRoughness: 0.15 }),
+      ouro,
+    ]);
+    disco.position.y = -0.07;
+    disco.receiveShadow = true;
+    const borda = new THREE.Mesh(new THREE.TorusGeometry(RD, 0.045, 12, 160).rotateX(PI / 2), ouro);
+    borda.position.y = 0.0;
+    borda.castShadow = true;
+    const pe = new THREE.Mesh(new THREE.CylinderGeometry(RD * 0.55, RD * 0.62, 0.12, 96), ouro);
+    pe.position.y = -0.2;
+    prato.add(disco, borda, pe);
   }
 
-  const pecas = new Map();
-  let itensInfo = {};
+  const mesas = {
+    salgados: criarMesa({
+      R, formas, mats, escalaPeca: 1.6, layout: layoutEspiral, inclinacaoMax: 0.25,
+      base: tabua, texBrilho: tex.brilho, corParticula: "#f4cf8a", escalaVitrine: 2.1,
+      vitrineItens: {
+        interno: ["coxinha", "paoCuia", "pastel", "enroladinhoSalsicha"],
+        externo: ["camarao", "paoParmesao", "saltenha", "sonhoGoiabada", "risole", "bananaReal"],
+      },
+    }),
+    doces: criarMesa({
+      R: RD, formas: doces, mats: matsDoces, escalaPeca: 1.45, layout: layoutGrade, inclinacaoMax: 0.04,
+      base: prato, extra: doces.forminha, texBrilho: tex.brilho, corParticula: "#fff1d0", escalaVitrine: 2.3,
+      alturasVitrine: { interno: 1.15, externo: [0.5, 0.8] },
+      vitrineItens: {
+        interno: ["brigadeiro", "morangoCoberto", "beijinho", "caixinhaMorango"],
+        externo: ["bichoDePe", "camafeu", "trufaMaracuja", "ferrero", "uvaCoberta", "ninhoNutella"],
+      },
+    }),
+  };
+  Object.values(mesas).forEach((m) => cena.add(m.raiz));
+
+  let grupoAtivo = "salgados";
+  const mostra = { salgados: 1, doces: 0 };
   let destaque = null;
-  let alvoPresenca = 1;
-  let presenca = 1;
-
-  const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; };
-
-  function atualizar({ itens }, instantaneo = false) {
-    itensInfo = Object.fromEntries(itens.map((i) => [i.id, i]));
-    alvoPresenca = itens.length ? 0 : 1;
-    if (instantaneo) presenca = alvoPresenca;
-
-    const desejadas = [];
-    itens.forEach((it) => { for (let k = 0; k < it.pecas; k++) desejadas.push({ chave: `${it.id}#${k}`, item: it }); });
-
-    const N = desejadas.length;
-    const passo = Math.min(0.42, (R - 0.55) / Math.sqrt(N + 0.6));
-    const ouro = 2.39996323;
-    const vivas = new Set();
-    // Se a vitrine ainda está na tela, espera ela sair antes das peças caírem
-    const atrasoBase = presenca > 0.5 && !instantaneo ? 0.35 : 0;
-    let novas = 0;
-
-    desejadas.forEach(({ chave, item }, i) => {
-      vivas.add(chave);
-      const r = passo * Math.sqrt(i + 0.6);
-      const a = i * ouro;
-      const h = hash(chave);
-      const alvo = new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
-      let p = pecas.get(chave);
-      if (!p || p.saindo) {
-        const semAnimacao = reduzido || instantaneo;
-        p = {
-          chave, id: item.id, forma: item.forma,
-          pos: alvo.clone().add(new THREE.Vector3(0, semAnimacao ? 0 : 2.6 + h * 1.2, 0)),
-          vy: 0, escala: semAnimacao ? 1 : 0.001, alvoEscala: 1,
-          atraso: semAnimacao ? 0 : atrasoBase + Math.min(novas, 30) * 0.035,
-          giro: h * PI * 2, inclinacao: (h - 0.5) * 0.25, rodando: (h - 0.5) * 6,
-          caindo: !semAnimacao, saindo: false, alvo,
-        };
-        novas++;
-        pecas.set(chave, p);
-      }
-      p.alvo.copy(alvo);
-    });
-
-    pecas.forEach((p) => {
-      if (!vivas.has(p.chave) && !p.saindo) { p.saindo = true; p.alvoEscala = 0; }
-    });
-  }
 
   // ---------- Ponteiro: girar e identificar peças ----------
   const dica = container.querySelector("#dica-peca");
@@ -787,14 +1211,14 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   let arrastando = false, moveu = 0, ultimoX = 0, velGiro = 0;
 
   function apontar(e) {
+    const mesa = mesas[grupoAtivo];
     const r = canvas.getBoundingClientRect();
     ponteiro.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     raio.setFromCamera(ponteiro, camera);
-    const hits = raio.intersectObjects(Object.values(malhas).filter((m) => m.count > 0), false);
-    const hit = hits.find((h) => h.instanceId !== undefined);
+    const hit = raio.intersectObjects(mesa.malhasVisiveis(), false).find((h) => h.instanceId !== undefined);
     if (!hit) { dica.hidden = true; return null; }
-    const p = pecas.get(hit.object.userData.indice[hit.instanceId]);
-    const info = p && itensInfo[p.id];
+    const p = mesa.pecas.get(hit.object.userData.indice[hit.instanceId]);
+    const info = p && mesa.itensInfo[p.id];
     if (!info) { dica.hidden = true; return null; }
     dica.innerHTML = `${info.nome}<small>${info.q} unidades</small>`;
     dica.style.left = `${e.clientX - r.left}px`;
@@ -817,7 +1241,7 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
       ultimoX = e.clientX;
       moveu += Math.abs(dx);
       velGiro = dx * 0.006;
-      mesa.rotation.y += velGiro;
+      mesas[grupoAtivo].giro.rotation.y += velGiro;
       dica.hidden = true;
     } else if (!toque) {
       destaque = apontar(e);
@@ -834,12 +1258,14 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
     });
   }
 
-  document.addEventListener("encomenda:mudou", (e) => atualizar(e.detail));
+  const aplicar = (dados, instantaneo = false) => {
+    Object.entries(mesas).forEach(([g, mesa]) => mesa.atualizar(dados.grupos[g] || { itens: [] }, instantaneo));
+  };
+  document.addEventListener("encomenda:mudou", (e) => aplicar(e.detail));
   document.addEventListener("encomenda:destaque", (e) => { destaque = e.detail.id; });
+  document.addEventListener("encomenda:grupo", (e) => { grupoAtivo = e.detail.grupo; dica.hidden = true; });
 
   // ---------- Câmera: enquadra a área visível do palco ----------
-  // No celular o palco encolhe ao rolar (parte de cima sai da tela);
-  // a câmera desloca e afasta para manter tudo dentro da parte visível.
   let W = 1, H = 1;
   function redimensionar() {
     W = container.clientWidth;
@@ -851,23 +1277,18 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   redimensionar();
 
   const olhar = new THREE.Vector3();
-  function enquadrar(vitrineEase) {
+  function enquadrar(vitrineEase, raioMesa) {
     const rect = container.getBoundingClientRect();
     const escondido = Math.min(Math.max(0, -rect.top), H * 0.75);
     const v = Math.max(H - escondido, 60);
-    const aspecto = W / v;
-
     camera.aspect = W / H;
     const vFov = THREE.MathUtils.degToRad(camera.fov);
     const tanV = Math.tan(vFov / 2) * (v / H);
-    const tanH = tanV * aspecto;
-
-    // Com a vitrine, enquadra a tábua + os salgados flutuando
-    const raioV = R * (0.92 + vitrineEase * 0.2);
-    const raioH = R * (1.1 + vitrineEase * 0.04);
+    const tanH = tanV * (W / v);
+    const raioV = raioMesa * (0.92 + vitrineEase * 0.2);
+    const raioH = raioMesa * (1.1 + vitrineEase * 0.04);
     const dist = Math.max(raioV / tanV, raioH / tanH);
     const elev = 0.9 - vitrineEase * 0.32;
-
     olhar.set(0, 0.05 + vitrineEase * 0.85, 0.25 - vitrineEase * 0.15);
     camera.position.set(0, olhar.y + Math.sin(elev) * dist, olhar.z + Math.cos(elev) * dist);
     camera.lookAt(olhar);
@@ -876,8 +1297,6 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   }
 
   // ---------- Animação ----------
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), eul = new THREE.Euler(), esc = new THREE.Vector3();
-  const corNormal = new THREE.Color(1, 1, 1), corApagada = new THREE.Color(0.38, 0.33, 0.3);
   const relogio = new THREE.Clock();
   let t = 0, primeiro = true;
 
@@ -886,81 +1305,25 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
     const vel = reduzido ? 0.15 : 1;
     t += dt * vel;
 
-    if (!arrastando) {
-      velGiro = amortecer(velGiro, 0, 3, dt);
-      mesa.rotation.y += velGiro + (reduzido ? 0 : 0.08) * dt;
-    }
+    if (!arrastando) velGiro = amortecer(velGiro, 0, 3, dt);
     incl.x = amortecer(incl.x, incl.alvo, 4, dt);
-    mesa.rotation.x = incl.x;
 
-    // Vitrine entra e sai
-    presenca = amortecer(presenca, alvoPresenca, alvoPresenca ? 3 : 6, dt);
-    const ease = presenca * presenca * (3 - 2 * presenca);
-    vitrine.visible = presenca > 0.01;
-    if (vitrine.visible) {
-      vitrine.scale.setScalar(Math.max(ease, 0.001));
-      vitrine.position.y = (1 - ease) * 1.4;
-      matP.opacity = 0.7 * ease;
-      satelites.forEach((s) => {
-        const a = s.fase + t * 0.18 * s.sentido;
-        s.g.position.set(Math.cos(a) * s.raio, s.y + Math.sin(t * 0.9 + s.fase * 2) * 0.1, Math.sin(a) * s.raio);
-        // Gira devagar em pé, balançando um pouco (sem cambalhotas)
-        s.giroY += dt * s.velGiro * vel;
-        s.g.rotation.set(
-          s.inclX + Math.sin(t * 0.8 + s.fase) * 0.18,
-          s.giroY,
-          s.inclZ + Math.cos(t * 0.7 + s.fase) * 0.12,
-        );
-      });
-      const p = geoP.attributes.position;
-      for (let i = 0; i < NP; i++) {
-        let y = p.getY(i) + velP[i] * dt * vel;
-        if (y > 3.6) y = 0;
-        p.setY(i, y);
-      }
-      p.needsUpdate = true;
-    }
-    enquadrar(ease);
-
-    // Peças
-    Object.values(malhas).forEach((m) => { m.count = 0; m.userData.indice.length = 0; });
-    for (const p of pecas.values()) {
-      if (p.atraso > 0) { p.atraso -= dt; continue; }
-      const elevar = destaque && p.id === destaque ? 0.16 : 0;
-
-      p.pos.x = amortecer(p.pos.x, p.alvo.x, 7, dt);
-      p.pos.z = amortecer(p.pos.z, p.alvo.z, 7, dt);
-      if (p.caindo) {
-        p.vy -= 22 * dt;
-        p.pos.y += p.vy * dt;
-        if (p.pos.y <= 0) {
-          p.pos.y = 0;
-          p.vy = -p.vy * 0.32;
-          if (p.vy < 0.6) { p.caindo = false; p.vy = 0; }
-        }
-        p.rodando = amortecer(p.rodando, 0, 2, dt);
-        p.giro += p.rodando * dt;
-      } else {
-        p.pos.y = amortecer(p.pos.y, elevar, 10, dt);
-      }
-      p.escala = amortecer(p.escala, p.alvoEscala, p.saindo ? 10 : 14, dt);
-      if (p.saindo && p.escala < 0.02) { pecas.delete(p.chave); continue; }
-
-      const m = malhas[p.forma];
-      if (m.count >= CAP) continue;
-      eul.set(p.inclinacao, p.giro, p.inclinacao * 0.5);
-      q.setFromEuler(eul);
-      esc.setScalar(Math.max(p.escala, 0.001) * ESCALA_PECA);
-      m4.compose(p.pos, q, esc);
-      m.setMatrixAt(m.count, m4);
-      m.setColorAt(m.count, destaque && p.id !== destaque ? corApagada : corNormal);
-      m.userData.indice[m.count] = p.chave;
-      m.count++;
-    }
-    Object.values(malhas).forEach((m) => {
-      m.instanceMatrix.needsUpdate = true;
-      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    let easeAtivo = 0;
+    Object.entries(mesas).forEach(([g, mesa]) => {
+      // Troca de bandeja: a atual afunda e encolhe, a nova sobe
+      mostra[g] = amortecer(mostra[g], g === grupoAtivo ? 1 : 0, 5, dt);
+      const m = mostra[g], e = m * m * (3 - 2 * m);
+      mesa.raiz.visible = m > 0.01;
+      mesa.raiz.scale.setScalar(Math.max(0.6 + 0.4 * e, 0.001));
+      mesa.raiz.position.y = (1 - e) * -1.6;
+      mesa.raiz.rotation.x = incl.x;
+      if (!mesa.raiz.visible) return;
+      if (!arrastando && g === grupoAtivo) mesa.giro.rotation.y += velGiro;
+      mesa.giro.rotation.y += (reduzido ? 0 : 0.08) * dt;
+      const ease = mesa.quadro(dt, t, vel, destaque);
+      if (g === grupoAtivo) easeAtivo = ease;
     });
+    enquadrar(easeAtivo, mesas[grupoAtivo].R);
 
     renderer.render(cena, camera);
     if (primeiro) { canvas.classList.add("pronta"); primeiro = false; }
@@ -972,7 +1335,12 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   });
 
   // Estado inicial (pedido salvo no aparelho): sem animação de queda
-  if (window.__encomenda) atualizar(window.__encomenda.estadoBandeja(), true);
+  if (window.__encomenda) {
+    const ini = window.__encomenda.estadoBandeja();
+    grupoAtivo = ini.grupo || "salgados";
+    Object.keys(mostra).forEach((g) => { mostra[g] = g === grupoAtivo ? 1 : 0; });
+    aplicar(ini, true);
+  }
 }
 
 // ---------------------------------------------------------
@@ -984,5 +1352,8 @@ if (!temWebGL()) {
   const tex = criarTexturas();
   const mats = criarMateriais(tex);
   const formas = criarFormas();
-  cenaBandeja(document.getElementById("cena-bandeja"), document.getElementById("bandeja"), formas, mats, tex);
+  const texDoces = criarTexturasDoces();
+  const matsDoces = criarMateriaisDoces(tex, texDoces);
+  const doces = criarDoces();
+  cenaBandeja(document.getElementById("cena-bandeja"), document.getElementById("bandeja"), formas, mats, tex, doces, matsDoces, texDoces);
 }

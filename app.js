@@ -11,15 +11,24 @@
   const toque = matchMedia("(pointer: coarse)").matches;
   const reduzido = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  const GRUPOS = CONFIG.grupos;
+  const grupoPorId = Object.fromEntries(GRUPOS.map((g) => [g.id, g]));
+  const palavra = (grupo, n) => (n === 1 ? grupoPorId[grupo].singular : grupoPorId[grupo].plural);
+
   const ITENS = [];
   CARDAPIO.forEach((cat) => {
+    const grupo = cat.grupo || "salgados";
     cat.itens.forEach((it) => {
+      const doce = grupo === "doces";
+      const min = doce ? CONFIG.minimoDoce : it.especial ? CONFIG.minimoEspecial : it.minimo || CONFIG.minimoPadrao;
       ITENS.push({
         ...it,
         id: it.nome,
         categoria: cat.id,
+        grupo,
         centavos: Math.round(it.preco * 100),
-        min: it.especial ? CONFIG.minimoEspecial : it.minimo || CONFIG.minimoPadrao,
+        min,
+        inicial: doce ? CONFIG.inicialDoce : min,
       });
     });
   });
@@ -54,7 +63,9 @@
     salvar();
   }
 
-  let abaAtual = CARDAPIO[0].id;
+  let grupoAtual = GRUPOS[0].id;
+  const categoriasDo = (grupo) => CARDAPIO.filter((c) => (c.grupo || "salgados") === grupo);
+  let abaAtual = categoriasDo(grupoAtual)[0].id;
 
   // ---------- Cálculos ----------
   const selecionados = () => estado.ordem.filter((id) => estado.qtd[id]).map((id) => ({ ...porId[id], q: estado.qtd[id] }));
@@ -64,7 +75,11 @@
     const unidades = sel.reduce((s, i) => s + i.q, 0);
     const total = sel.reduce((s, i) => s + i.q * i.centavos, 0);
     const entrada = Math.ceil((total * CONFIG.entradaPercentual) / 100);
-    return { sel, unidades, total, entrada, temEspecial: sel.some((i) => i.especial) };
+    const porGrupo = Object.fromEntries(GRUPOS.map((g) => {
+      const itens = sel.filter((i) => i.grupo === g.id);
+      return [g.id, { itens, unidades: itens.reduce((s, i) => s + i.q, 0), total: itens.reduce((s, i) => s + i.q * i.centavos, 0) }];
+    }));
+    return { sel, unidades, total, entrada, porGrupo, temEspecial: sel.some((i) => i.especial) };
   };
 
   // Quantas unidades cada peça 3D representa (mantém a bandeja legível)
@@ -78,7 +93,9 @@
     const p = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   };
-  const antecedencia = () => (totais().temEspecial ? CONFIG.antecedenciaEspecial : CONFIG.antecedenciaPadrao);
+  // A antecedência do pedido é a maior entre os itens escolhidos
+  const antecedencia = () => totais().sel.reduce((maior, i) => Math.max(maior,
+    i.grupo === "doces" ? CONFIG.antecedenciaDoce : i.especial ? CONFIG.antecedenciaEspecial : CONFIG.antecedenciaPadrao), 0);
   const dataMinima = () => hojeISO(antecedencia());
   const dataBR = (iso) => {
     const [a, m, d] = iso.split("-").map(Number);
@@ -89,11 +106,16 @@
   // ---------- Comunicação com a cena 3D ----------
   const estadoBandeja = () => {
     const t = totais();
-    const unidade = unidadesPorPeca(t.unidades);
-    return {
-      unidade,
-      itens: t.sel.map((i) => ({ id: i.id, nome: i.nome, forma: i.forma, q: i.q, pecas: Math.max(1, Math.round(i.q / unidade)) })),
-    };
+    const grupos = {};
+    GRUPOS.forEach((g) => {
+      const pg = t.porGrupo[g.id];
+      const unidade = unidadesPorPeca(pg.unidades);
+      grupos[g.id] = {
+        unidade,
+        itens: pg.itens.map((i) => ({ id: i.id, nome: i.nome, forma: i.forma, q: i.q, pecas: Math.max(1, Math.round(i.q / unidade)) })),
+      };
+    });
+    return { grupo: grupoAtual, grupos };
   };
   const notificar = () => document.dispatchEvent(new CustomEvent("encomenda:mudou", { detail: estadoBandeja() }));
   const destacar = (id) => document.dispatchEvent(new CustomEvent("encomenda:destaque", { detail: { id } }));
@@ -133,14 +155,66 @@
     salvar();
     atualizarItem(id, q > antes);
     atualizarAbas();
+    atualizarGrupos();
     atualizarResumoGeral();
     notificar();
+  };
+
+  // ---------- Grupos (Salgados | Doces) ----------
+  const REGRAS = {
+    salgados: `Mín. <strong>10 un.</strong> por sabor <span class="sep">·</span> <span class="selo">Especial</span> <strong>25 un.</strong> e <strong>2 dias</strong> de antecedência`,
+    doces: `Sem quantidade mínima <span class="sep">·</span> <strong>forminha inclusa</strong>`,
+  };
+  const VAZIO = {
+    salgados: ["Monte sua bandeja", "veja os salgados chegando."],
+    doces: ["Monte sua bandeja de doces", "veja os doces chegando."],
+  };
+
+  const renderGrupos = () => {
+    $("#grupos").innerHTML = GRUPOS.map((g) => `
+      <button type="button" class="grupo" role="tab" data-grupo="${g.id}" aria-selected="${g.id === grupoAtual}">
+        ${g.nome}<span class="contador" hidden></span>
+      </button>`).join("");
+    atualizarGrupos();
+  };
+
+  const atualizarGrupos = () => {
+    const t = totais();
+    $$(".grupo").forEach((b) => {
+      const u = t.porGrupo[b.dataset.grupo].unidades;
+      const c = $(".contador", b);
+      c.hidden = u === 0;
+      c.textContent = u;
+      b.setAttribute("aria-selected", String(b.dataset.grupo === grupoAtual));
+    });
+    $("#regras").innerHTML = REGRAS[grupoAtual] || "";
+    const [titulo, resto] = VAZIO[grupoAtual];
+    $("#vazio-titulo").textContent = titulo;
+    $("#vazio-resto").textContent = resto;
+  };
+
+  const trocarGrupo = (grupo) => {
+    if (grupo === grupoAtual) return;
+    grupoAtual = grupo;
+    abaAtual = categoriasDo(grupo)[0].id;
+    renderAbas();
+    renderLista();
+    atualizarGrupos();
+    atualizarResumoGeral();
+    document.dispatchEvent(new CustomEvent("encomenda:grupo", { detail: { grupo } }));
+    // Volta o início da lista para perto do topo, sem pular a bandeja
+    const faixa = $(".abas-faixa");
+    const topo = faixa.getBoundingClientRect().top;
+    if (topo < 0 || topo > innerHeight * 0.8) faixa.scrollIntoView({ block: "start", behavior: reduzido ? "auto" : "smooth" });
   };
 
   // ---------- Abas ----------
   const renderAbas = () => {
     const abas = $("#abas");
-    CARDAPIO.forEach((c) => {
+    $$(".aba", abas).forEach((b) => b.remove());
+    const cats = categoriasDo(grupoAtual);
+    abas.style.gridTemplateColumns = `repeat(${cats.length}, 1fr)`;
+    cats.forEach((c) => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "aba";
@@ -176,7 +250,7 @@
     let html = `${fmt(item.centavos)} / un.`;
     if (q > 0) html += ` · <span class="subtotal">${fmt(q * item.centavos)}</span>`;
     if (item.especial) html += ` <span class="selo">Especial</span>`;
-    else if (item.min !== CONFIG.minimoPadrao) html += ` · mín. ${item.min} un.`;
+    else if (item.grupo === "salgados" && item.min !== CONFIG.minimoPadrao) html += ` · mín. ${item.min} un.`;
     return html;
   };
 
@@ -220,13 +294,18 @@
   };
 
   // ---------- Bandeja (textos sobre o 3D) e barra ----------
+  const resumoQtd = (t) => GRUPOS
+    .filter((g) => t.porGrupo[g.id].unidades > 0)
+    .map((g) => `${t.porGrupo[g.id].unidades} ${palavra(g.id, t.porGrupo[g.id].unidades)}`)
+    .join(" · ");
+
   const atualizarResumoGeral = () => {
     const t = totais();
-    const palavra = t.unidades === 1 ? "salgado" : "salgados";
-    $("#bandeja").classList.toggle("cheia", t.unidades > 0);
-    $("#bandeja-qtd").textContent = `${t.unidades} ${palavra} · ${t.sel.length} ${t.sel.length === 1 ? "sabor" : "sabores"}`;
-    $("#bandeja-legenda").textContent = t.unidades ? `cada peça ≈ ${unidadesPorPeca(t.unidades)} un.` : "";
-    $("#barra-qtd").textContent = `${t.unidades} ${palavra}`;
+    const pg = t.porGrupo[grupoAtual];
+    $("#bandeja").classList.toggle("cheia", pg.unidades > 0);
+    $("#bandeja-qtd").textContent = `${pg.unidades} ${palavra(grupoAtual, pg.unidades)} · ${pg.itens.length} ${pg.itens.length === 1 ? "sabor" : "sabores"}`;
+    $("#bandeja-legenda").textContent = pg.unidades ? `cada peça ≈ ${unidadesPorPeca(pg.unidades)} un.` : "";
+    $("#barra-qtd").textContent = resumoQtd(t) || "0 itens";
     $("#barra-total").textContent = fmt(t.total);
     atualizarRepetir(t.unidades);
     const barra = $("#barra");
@@ -239,9 +318,12 @@
   function atualizarRepetir(unidades) {
     const box = $("#repetir");
     if (!ultimo || unidades > 0) { box.hidden = true; return; }
-    const un = ultimo.ordem.reduce((s, id) => s + ultimo.qtd[id], 0);
+    const partes = GRUPOS.map((g) => {
+      const n = ultimo.ordem.filter((id) => porId[id].grupo === g.id).reduce((s, id) => s + ultimo.qtd[id], 0);
+      return n ? `${n} ${palavra(g.id, n)}` : "";
+    }).filter(Boolean);
     const tot = ultimo.ordem.reduce((s, id) => s + ultimo.qtd[id] * porId[id].centavos, 0);
-    $("#repetir-resumo").textContent = `${un} salgados · ${ultimo.ordem.length} ${ultimo.ordem.length === 1 ? "sabor" : "sabores"} · ${fmt(tot)}`;
+    $("#repetir-resumo").textContent = `${partes.join(" · ")} · ${fmt(tot)}`;
     box.hidden = false;
   }
 
@@ -250,13 +332,13 @@
     estado.qtd = {};
     estado.ordem = [];
     ultimo.ordem.forEach((id) => {
-      const q = Math.max(ultimo.qtd[id], porId[id].min);
-      estado.qtd[id] = q;
+      estado.qtd[id] = Math.max(ultimo.qtd[id], porId[id].min);
       estado.ordem.push(id);
     });
     salvar();
     renderLista();
     atualizarAbas();
+    atualizarGrupos();
     atualizarResumoGeral();
     notificar();
     avisar("Pedido anterior carregado. Ajuste o que quiser.");
@@ -265,16 +347,23 @@
   // ---------- Painel do pedido ----------
   const renderPainel = () => {
     const t = totais();
-    $("#resumo").innerHTML = t.sel
-      .map((i) => `<li><span><span class="q">${i.q}×</span>${i.nome}</span><strong>${fmt(i.q * i.centavos)}</strong></li>`)
-      .join("");
+    const varios = GRUPOS.filter((g) => t.porGrupo[g.id].unidades > 0).length > 1;
+    $("#resumo").innerHTML = GRUPOS.map((g) => {
+      const pg = t.porGrupo[g.id];
+      if (!pg.unidades) return "";
+      const titulo = varios ? `<li class="resumo-grupo"><span>${g.nome}</span><span>${fmt(pg.total)}</span></li>` : "";
+      return titulo + pg.itens
+        .map((i) => `<li><span><span class="q">${i.q}×</span>${i.nome}</span><strong>${fmt(i.q * i.centavos)}</strong></li>`)
+        .join("");
+    }).join("");
     $("#total-final").textContent = fmt(t.total);
     $("#entrada").textContent = fmt(t.entrada);
     const data = $("#data");
     data.min = dataMinima();
+    const dias = antecedencia();
     $("#dica-data").textContent = t.temEspecial
       ? `Seu pedido tem itens especiais: retirada a partir de ${dataBR(data.min)}.`
-      : `Retirada a partir de ${dataBR(data.min)}.`;
+      : dias === 0 ? "Retirada a partir de hoje." : `Retirada a partir de ${dataBR(data.min)}.`;
   };
 
   let focoAnterior = null;
@@ -310,7 +399,7 @@
     $("#obs").value = estado.obs;
 
     // Links de WhatsApp
-    const textoOrcamento = "Olá! Vim pelo site e gostaria de um orçamento de bolo/doces para um evento.";
+    const textoOrcamento = "Olá! Vim pelo site e gostaria de um orçamento de bolo para um evento.";
     $("#link-orcamento").href = `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(textoOrcamento)}`;
     $("#link-whats-rodape").href = `https://wa.me/${CONFIG.whatsapp}`;
   };
@@ -344,26 +433,39 @@
 
   const montarMensagem = () => {
     const t = totais();
+    const grupos = GRUPOS.filter((g) => t.porGrupo[g.id].unidades > 0);
+    const titulo = grupos.length === 1 ? `*Nova encomenda de ${grupos[0].plural}*` : `*Nova encomenda: ${grupos.map((g) => g.plural).join(" e ")}*`;
     const linhas = [
-      `*Nova encomenda de salgados*`,
+      titulo,
       ``,
       `*Nome:* ${estado.nome.trim()}`,
       `*Retirada:* ${dataBR(estado.data)} às ${estado.hora}`,
       `*Pagamento:* ${estado.pagamento}`,
+    ];
+    grupos.forEach((g) => {
+      const pg = t.porGrupo[g.id];
+      linhas.push(
+        ``,
+        `*${g.nome}* (${pg.unidades} un.)`,
+        ...pg.itens.map((i) => `• ${i.q}× ${i.nome} — ${fmt(i.q * i.centavos)}`),
+      );
+    });
+    linhas.push(
       ``,
-      `*Itens*`,
-      ...t.sel.map((i) => `• ${i.q}× ${i.nome} — ${fmt(i.q * i.centavos)}`),
-      ``,
-      `Total de salgados: ${t.unidades} un.`,
       `*Total: ${fmt(t.total)}*`,
       `*Entrada (${CONFIG.entradaPercentual}%): ${fmt(t.entrada)}*`,
-    ];
+    );
     if (estado.obs.trim()) linhas.push(``, `*Observações:* ${estado.obs.trim()}`);
     return linhas.join("\n");
   };
   const linkWhatsApp = () => `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(montarMensagem())}`;
 
   // ---------- Eventos: cardápio ----------
+  $("#grupos").addEventListener("click", (e) => {
+    const b = e.target.closest(".grupo");
+    if (b) trocarGrupo(b.dataset.grupo);
+  });
+
   $("#abas").addEventListener("click", (e) => {
     const b = e.target.closest(".aba");
     if (!b || b.dataset.aba === abaAtual) return;
@@ -377,7 +479,7 @@
     if (!li) return;
     const id = li.dataset.id;
     const q = estado.qtd[id] || 0;
-    if (e.target.closest(".mais")) definirQtd(id, q === 0 ? porId[id].min : q + CONFIG.passo, "mais");
+    if (e.target.closest(".mais")) definirQtd(id, q === 0 ? porId[id].inicial : q + CONFIG.passo, "mais");
     else if (e.target.closest(".menos")) definirQtd(id, q - CONFIG.passo, "menos");
   });
   $("#lista").addEventListener("change", (e) => {
@@ -437,11 +539,12 @@
   document.fonts && document.fonts.ready.then(moverIndicador);
 
   // ---------- Início ----------
+  renderGrupos();
   renderAbas();
   renderLista();
   renderFixos();
   atualizarResumoGeral();
 
   // A cena 3D (módulo) chama isto quando estiver pronta
-  window.__encomenda = { estadoBandeja, montarMensagem, linkWhatsApp, totais, abrirPainel };
+  window.__encomenda = { estadoBandeja, montarMensagem, linkWhatsApp, totais, abrirPainel, trocarGrupo };
 })();

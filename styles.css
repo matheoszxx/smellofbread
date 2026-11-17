@@ -251,6 +251,65 @@ button, input, textarea { font: inherit; color: inherit; }
 .repetir strong { display: block; font-size: 0.95rem; font-weight: 600; }
 .repetir span { font-size: 0.8rem; color: var(--suave); }
 
+/* Salgados | Doces */
+.grupos {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.grupo {
+  position: relative;
+  padding: 6px 14px 10px;
+  border: 0;
+  background: none;
+  font-size: 1.12rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--apagado);
+  cursor: pointer;
+  transition: color 0.3s;
+}
+.grupo::after {
+  content: "";
+  position: absolute;
+  left: 14px; right: 14px; bottom: 2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--gradiente-ouro);
+  transform: scaleX(0);
+  transition: transform 0.45s var(--suave-in);
+}
+.grupo[aria-selected="true"] { color: var(--texto); }
+.grupo[aria-selected="true"]::after { transform: scaleX(1); }
+.grupo .contador {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 7px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ouro);
+  color: #24140a;
+  font-size: 0.7rem;
+  font-weight: 800;
+  vertical-align: 2px;
+}
+.grupo:focus-visible { outline: 2px solid var(--ouro-claro); outline-offset: 2px; border-radius: 10px; }
+
+/* Lista de resumo: título de cada grupo */
+.resumo .resumo-grupo {
+  padding-top: 18px;
+  border-bottom-color: var(--linha-forte);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ouro);
+}
+.resumo .resumo-grupo:first-child { padding-top: 4px; }
+
 /* Abas */
 .abas-faixa {
   position: sticky;
@@ -609,6 +668,7 @@ button, input, textarea { font: inherit; color: inherit; }
   .cardapio { padding: 0; }
   .regras { margin-top: 0; text-align: left; }
   .abas-faixa { top: 0; margin: 0; padding: 12px 0 10px; }
+  .grupos { justify-content: flex-start; margin-left: -14px; }
   .sem-3d .app { grid-template-columns: 1fr; max-width: 640px; }
 
   .painel-caixa {
