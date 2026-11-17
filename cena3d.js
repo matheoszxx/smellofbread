@@ -667,36 +667,30 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
   const vitrine = new THREE.Group();
   mesa.add(vitrine);
 
-  const ESC_PRINCIPAL = 4.4;
-  const altPrincipal = formas.coxinha.altura * ESC_PRINCIPAL;
-  const pivo = new THREE.Group();
-  const principal = new THREE.Mesh(formas.coxinha.geo, mats.frito);
-  principal.scale.setScalar(ESC_PRINCIPAL);
-  principal.position.y = -altPrincipal / 2;
-  principal.castShadow = true;
-  pivo.add(principal);
-  pivo.rotation.z = -0.14;
-  vitrine.add(pivo);
+  // Salgados mais fiéis à realidade, todos do mesmo tamanho, flutuando em dois anéis
+  // [forma, raio, altura, fase, sentido do anel]
+  const ESC_VITRINE = 2.1;
+  const anelInterno = ["coxinha", "paoCuia", "pastel", "enroladinhoSalsicha"]
+    .map((nome, i) => [nome, 0.9, 1.6, (i / 4) * PI * 2, -1]);
+  const anelExterno = ["camarao", "paoParmesao", "saltenha", "sonhoGoiabada", "risole", "bananaReal"]
+    .map((nome, i) => [nome, 1.95, i % 2 ? 1.1 : 0.75, (i / 6) * PI * 2 + PI / 6, 1]);
 
-  const satelites = [
-    ["bola", 1.85, 1.75, 0.0, 1.9],
-    ["empada", 2.1, 0.75, 1.1, 2.0],
-    ["esfirra", 1.9, 1.25, 2.2, 1.8],
-    ["pao", 2.15, 2.05, 3.2, 1.9],
-    ["camarao", 1.8, 0.65, 4.1, 2.0],
-    ["sonho", 2.1, 1.55, 5.1, 1.8],
-    ["barquete", 1.95, 2.3, 5.85, 1.7],
-  ].map(([nome, raio, y, fase, escala]) => {
+  const satelites = [...anelInterno, ...anelExterno].map(([nome, raio, y, fase, sentido]) => {
     const f = formas[nome];
     const m = new THREE.Mesh(f.geo, mats[f.mat]);
-    m.scale.setScalar(escala);
-    m.position.y = -f.altura * escala * 0.5;
+    m.scale.setScalar(ESC_VITRINE);
+    m.position.y = -f.altura * ESC_VITRINE * 0.5;
     m.castShadow = true;
     const g = new THREE.Group();
     g.add(m);
-    g.rotation.set(Math.random() * 0.8, Math.random() * PI * 2, Math.random() * 0.6);
     vitrine.add(g);
-    return { g, raio, y, fase, giro: (Math.random() - 0.5) * 0.8 + 0.4 };
+    return {
+      g, raio, y, fase, sentido,
+      giroY: Math.random() * PI * 2,
+      velGiro: 0.35 + Math.random() * 0.3,
+      inclX: (Math.random() - 0.5) * 0.5,
+      inclZ: (Math.random() - 0.5) * 0.4,
+    };
   });
 
   // Partículas douradas
@@ -869,12 +863,12 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
     const tanH = tanV * aspecto;
 
     // Com a vitrine, enquadra a tábua + os salgados flutuando
-    const raioV = R * (0.92 + vitrineEase * 0.32);
+    const raioV = R * (0.92 + vitrineEase * 0.2);
     const raioH = R * (1.1 + vitrineEase * 0.04);
     const dist = Math.max(raioV / tanV, raioH / tanH);
     const elev = 0.9 - vitrineEase * 0.32;
 
-    olhar.set(0, 0.05 + vitrineEase * 1.15, 0.25 - vitrineEase * 0.15);
+    olhar.set(0, 0.05 + vitrineEase * 0.85, 0.25 - vitrineEase * 0.15);
     camera.position.set(0, olhar.y + Math.sin(elev) * dist, olhar.z + Math.cos(elev) * dist);
     camera.lookAt(olhar);
     camera.setViewOffset(W, H, 0, -escondido / 2, W, H);
@@ -907,13 +901,16 @@ function cenaBandeja(canvas, container, formas, mats, tex) {
       vitrine.scale.setScalar(Math.max(ease, 0.001));
       vitrine.position.y = (1 - ease) * 1.4;
       matP.opacity = 0.7 * ease;
-      pivo.rotation.y = t * 0.5;
-      pivo.position.y = 0.45 + altPrincipal / 2 + Math.sin(t * 1.1) * 0.08;
       satelites.forEach((s) => {
-        const a = s.fase + t * 0.2;
-        s.g.position.set(Math.cos(a) * s.raio, s.y + Math.sin(t * 0.9 + s.fase) * 0.12, Math.sin(a) * s.raio);
-        s.g.rotation.y += dt * s.giro * vel;
-        s.g.rotation.x += dt * s.giro * 0.4 * vel;
+        const a = s.fase + t * 0.18 * s.sentido;
+        s.g.position.set(Math.cos(a) * s.raio, s.y + Math.sin(t * 0.9 + s.fase * 2) * 0.1, Math.sin(a) * s.raio);
+        // Gira devagar em pé, balançando um pouco (sem cambalhotas)
+        s.giroY += dt * s.velGiro * vel;
+        s.g.rotation.set(
+          s.inclX + Math.sin(t * 0.8 + s.fase) * 0.18,
+          s.giroY,
+          s.inclZ + Math.cos(t * 0.7 + s.fase) * 0.12,
+        );
       });
       const p = geoP.attributes.position;
       for (let i = 0; i < NP; i++) {
