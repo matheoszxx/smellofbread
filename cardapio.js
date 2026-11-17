@@ -33,7 +33,7 @@ const CARDAPIO = [
     id: "fritos",
     nome: "Fritos",
     itens: [
-      { nome: "Banana real", forma: "rolo", preco: 1.4 },
+      { nome: "Banana real", forma: "bananaReal", preco: 1.4 },
       { nome: "Bolinha de queijo", forma: "bola", preco: 1.4 },
       { nome: "Bolinha de carne seca com banana", forma: "bola", preco: 1.8, especial: true },
       { nome: "Boliviano de frango", forma: "oval", preco: 1.4 },
@@ -55,8 +55,8 @@ const CARDAPIO = [
     itens: [
       { nome: "Esfirra de frango", forma: "esfirra", preco: 1.4 },
       { nome: "Esfirra de carne", forma: "esfirra", preco: 1.4 },
-      { nome: "Enroladinho de queijo e presunto", forma: "enroladinho", preco: 1.4 },
-      { nome: "Enroladinho de salsicha", forma: "enroladinho", preco: 1.4 },
+      { nome: "Enroladinho de queijo e presunto", forma: "enroladinhoQP", preco: 1.4 },
+      { nome: "Enroladinho de salsicha", forma: "enroladinhoSalsicha", preco: 1.4 },
       { nome: "Empada doce", forma: "empada", preco: 1.5 },
       { nome: "Empada de frango", forma: "empada", preco: 1.4 },
       { nome: "Empada de bacalhau", forma: "empada", preco: 2.0, especial: true },

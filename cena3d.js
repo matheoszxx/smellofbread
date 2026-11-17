@@ -216,8 +216,74 @@ function criarFormas() {
 
   F.rolo = { mat: "frito", geo: pintar(normalizar(capsula(0.15, 0.55), 0.5), "#6a3611", "#b5722e") };
 
-  F.camarao = { mat: "frito", geo: pintar(normalizar(
-    new THREE.TorusGeometry(0.22, 0.11, 16, 32, PI * 1.3).rotateX(-PI / 2), 0.44), "#6c3610", "#bb7a32") };
+  // Banana real: pastel retangular fofo, pontas apertadas com garfo, coberto de canela e açúcar
+  {
+    const g = new THREE.SphereGeometry(1, 64, 32);
+    const p = g.attributes.position;
+    const sp = (v, e) => Math.sign(v) * Math.pow(Math.abs(v), e);
+    for (let i = 0; i < p.count; i++) {
+      let x = sp(p.getX(i), 0.28), y = sp(p.getY(i), 0.75), z = sp(p.getZ(i), 0.42);
+      const ponta = Math.max(0, (Math.abs(x) - 0.78) / 0.22);           // 0 no meio, 1 na ponta
+      y *= 1 - 0.65 * ponta;                                             // ponta achatada
+      y += Math.sign(y) * Math.sin(z * 48) * 0.15 * ponta;               // marcas do garfo
+      y *= 1 + 0.07 * Math.sin(x * 9.3) * Math.sin(z * 7.1);             // irregularidade da massa
+      p.setXYZ(i, x * 0.5, y * 0.11, z * 0.2);
+    }
+    g.computeVertexNormals();
+    F.bananaReal = { mat: "acucar", geo: pintar(normalizar(g, 0.56), "#6e3f1e", "#a8703f", 0.08) };
+  }
+
+  // Camarão empanado: corpo curvado que afina até a cauda vermelha
+  {
+    const caminho = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.0, 0.0, 0.0),
+      new THREE.Vector3(0.24, 0.0, -0.13),
+      new THREE.Vector3(0.47, 0.0, 0.0),
+      new THREE.Vector3(0.53, 0.02, 0.26),
+      new THREE.Vector3(0.41, 0.05, 0.5),
+      new THREE.Vector3(0.17, 0.1, 0.62),
+    ]);
+    const SEG = 72, RAD = 16;
+    const raioEm = (t) => {
+      const cabeca = 0.75 + 0.25 * Math.min(1, t / 0.08);
+      return 0.175 * cabeca * (1 - 0.58 * Math.pow(t, 1.3));
+    };
+    const corpo = new THREE.TubeGeometry(caminho, SEG, 1, RAD, false);
+    const p = corpo.attributes.position;
+    const c = new THREE.Vector3(), v = new THREE.Vector3();
+    for (let i = 0; i <= SEG; i++) {
+      const t = i / SEG;
+      caminho.getPointAt(t, c);
+      // Empanado irregular: o raio varia um pouco em volta e ao longo do corpo
+      for (let j = 0; j <= RAD; j++) {
+        const k = i * (RAD + 1) + j;
+        v.fromBufferAttribute(p, k).sub(c);
+        const irregular = 1 + 0.07 * Math.sin(j * 2.3 + i * 0.9) * Math.cos(i * 0.45);
+        v.multiplyScalar(raioEm(t) * irregular).add(c);
+        p.setXYZ(k, v.x, v.y, v.z);
+      }
+    }
+    corpo.computeVertexNormals();
+    pintar(corpo, "#8a4612", "#cf8433", 0.08);
+
+    const cabeca = new THREE.SphereGeometry(raioEm(0), 20, 14);
+    caminho.getPointAt(0, c);
+    cabeca.translate(c.x, c.y, c.z);
+    pintar(cabeca, "#8a4612", "#c47a2e", 0.08);
+
+    // Cauda: duas abas em leque, na cor do camarão
+    const fim = caminho.getPointAt(1);
+    const dir = caminho.getTangentAt(1).normalize();
+    const giro = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    const aba = (lado) => {
+      const g = new THREE.ConeGeometry(0.11, 0.26, 12).scale(1, 1, 0.32).translate(0, 0.12, 0);
+      g.rotateZ(lado * 0.45);
+      g.applyQuaternion(giro);
+      g.translate(fim.x - dir.x * 0.03, fim.y - dir.y * 0.03, fim.z - dir.z * 0.03);
+      return pintar(g, "#b8361a", "#e46a35", 0.05);
+    };
+    F.camarao = { mat: "frito", geo: normalizar(mergeGeometries([corpo, cabeca, aba(1), aba(-1)]), 0.5) };
+  }
 
   const meiaLua = () => {
     const s = new THREE.Shape();
@@ -236,6 +302,46 @@ function criarFormas() {
     extrudar(formaArredondada([[0, 0.5], [-0.45, -0.28], [0.45, -0.28]], 0.14), 0.12, 0.08), 0.5), "#a8692a", "#e0a548") };
 
   F.enroladinho = { mat: "assado", geo: pintar(normalizar(capsula(0.16, 0.52), 0.5), "#a86a2c", "#e2a64e") };
+
+  // Enroladinho: massa enrolada em espiral, recheio aparecendo nas pontas,
+  // topo dourado e brilhante, laterais claras e gergelim
+  const enroladinhoCom = (corRecheio, corRecheio2, gergelim) => {
+    const L = 0.32;
+    const massa = torno([
+      [0.1, -L], [0.17, -L + 0.012], [0.205, -L + 0.05], [0.222, -L + 0.12],
+      [0.228, 0], [0.222, L - 0.12], [0.205, L - 0.05], [0.17, L - 0.012], [0.1, L],
+    ], 48);
+    const p = massa.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const r = Math.hypot(x, z);
+      if (r < 0.15) continue;
+      const th = Math.atan2(z, x);
+      const fator = 1 + 0.05 * Math.sin(th + y * 15) + 0.02 * Math.sin(th * 3 - y * 9);  // dobra da espiral
+      p.setXYZ(i, x * fator, y, z * fator);
+    }
+    massa.computeVertexNormals();
+    massa.rotateZ(PI / 2);
+    pintar(massa, "#efd4a0", "#cf8030", 0.05);
+
+    const recheio = new THREE.CylinderGeometry(0.118, 0.118, L * 2 + 0.05, 28, 1).rotateZ(PI / 2);
+    pintar(recheio, corRecheio, corRecheio2, 0.04);
+
+    const partes = [massa, recheio];
+    if (gergelim) {
+      for (let s = 0; s < 14; s++) {
+        const ang = (Math.random() - 0.5) * 1.6;            // em volta do topo
+        const ao = (Math.random() - 0.5) * 0.46;            // ao longo do comprimento
+        const sem = new THREE.SphereGeometry(0.016, 6, 4).scale(1.7, 0.55, 1);
+        sem.rotateY(Math.random() * PI);
+        sem.translate(ao, Math.cos(ang) * 0.232, Math.sin(ang) * 0.232);
+        partes.push(pintar(sem, "#f1e3c2", "#f8eed8", 0.02));
+      }
+    }
+    return normalizar(mergeGeometries(partes), 0.5);
+  };
+  F.enroladinhoSalsicha = { mat: "assado", geo: enroladinhoCom("#9a2c18", "#c2452a", true) };
+  F.enroladinhoQP = { mat: "assado", geo: enroladinhoCom("#e0a08c", "#f1c27a", false) };
 
   // Empada: corpo + tampa abaulada + borda
   {
