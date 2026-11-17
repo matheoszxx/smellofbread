@@ -185,6 +185,58 @@ function formaArredondada(pontosXY, raio) {
   return s;
 }
 
+// Massa recheada e estufada a partir de um contorno (ex.: meia-lua).
+// contorno(s) -> [x, z] para s em [0,1); aperto(s) -> 0..1 diz onde a borda é fechada com garfo.
+function massaRecheada(contorno, aperto, { altura = 0.14, base = 0.55, expo = 2.5, ondas = 0, amp = 0.012, bolhas = 0 } = {}) {
+  const T = 120, RN = 16;
+  const amostras = [];
+  for (let j = 0; j < T; j++) amostras.push(contorno(j / T));
+  const cx = amostras.reduce((s, p) => s + p[0], 0) / T;
+  const cz = amostras.reduce((s, p) => s + p[1], 0) / T;
+
+  const pos = [], uv = [], idx = [];
+  [1, -1].forEach((face, f) => {
+    for (let i = 0; i <= RN; i++) {
+      const r = i / RN;
+      for (let j = 0; j <= T; j++) {
+        const s = (j % T) / T;
+        const [bx, bz] = amostras[j % T];
+        const x = cx + (bx - cx) * r, z = cz + (bz - cz) * r;
+        const c = aperto(s);
+        const rc = 1 - 0.22 * c;                                       // a borda apertada vira uma aba fina
+        let h = altura * Math.sqrt(Math.max(0, 1 - Math.pow(Math.min(r / rc, 1), expo)));
+        h = Math.max(h, 0.014 * c * (1 - Math.pow(r, 10)));
+        if (bolhas) h *= 1 + bolhas * Math.max(0, Math.sin(x * 41) * Math.sin(z * 37) - 0.35);
+        if (face < 0) h *= base;
+        const ondinha = ondas && r > 0.76 ? Math.sin(s * ondas * PI * 2) * amp * c * ((r - 0.76) / 0.24) : 0;
+        pos.push(x, face * h + ondinha, z);
+        uv.push(r, s);
+      }
+    }
+    const off = f * (RN + 1) * (T + 1);
+    for (let i = 0; i < RN; i++) {
+      for (let j = 0; j < T; j++) {
+        const a = off + i * (T + 1) + j, b = a + 1, d = a + (T + 1), e = d + 1;
+        if (face > 0) idx.push(a, b, d, b, e, d); else idx.push(a, d, b, b, d, e);
+      }
+    }
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+// Meia-lua: arco (borda apertada) + lado reto (dobra lisa)
+const contornoMeiaLua = (s) => {
+  if (s < 0.75) { const a = (s / 0.75) * PI; return [0.5 * Math.cos(a), 0.5 * Math.sin(a)]; }
+  const t = (s - 0.75) / 0.25;
+  return [-0.5 + t, 0];
+};
+const apertoMeiaLua = (s) => (s < 0.75 ? Math.min(1, Math.sin((s / 0.75) * PI) * 6) : 0);
+
 function extrudar(shape, profundidade = 0.12, bisel = 0.07) {
   const g = new THREE.ExtrudeGeometry(shape, {
     depth: profundidade, bevelEnabled: true, bevelThickness: bisel, bevelSize: bisel * 0.85,
@@ -212,7 +264,10 @@ function criarFormas() {
     [0, 0], [0.18, 0.12], [0.3, 0.35], [0.33, 0.6], [0.3, 0.85], [0.18, 1.08], [0, 1.2],
   ]).rotateZ(PI / 2), 0.5), "#3f1f0c", "#6e3816") };
 
-  F.croquete = { mat: "frito", geo: pintar(normalizar(capsula(0.2, 0.5), 0.48), "#64320f", "#ad6a2a") };
+  // Croquete: formato de torpedo, empanado
+  F.croquete = { mat: "frito", geo: pintar(normalizar(torno([
+    [0, 0], [0.11, 0.025], [0.185, 0.1], [0.2, 0.3], [0.185, 0.5], [0.11, 0.575], [0, 0.6],
+  ]).rotateZ(PI / 2), 0.5), "#64320f", "#ad6a2a") };
 
   F.rolo = { mat: "frito", geo: pintar(normalizar(capsula(0.15, 0.55), 0.5), "#6a3611", "#b5722e") };
 
@@ -293,7 +348,47 @@ function criarFormas() {
     return extrudar(s, 0.08, 0.08);
   };
   F.meialua = { mat: "frito", geo: pintar(normalizar(meiaLua(), 0.52), "#7e461a", "#c58a42") };
-  F.pastelForno = { mat: "assado", geo: pintar(normalizar(meiaLua(), 0.52), "#b0702b", "#e0a24c") };
+
+  // Pastel frito: meia-lua estufada, borda marcada com garfo e bolhinhas de fritura
+  F.pastel = { mat: "assado", geo: pintar(normalizar(
+    massaRecheada(contornoMeiaLua, apertoMeiaLua, { altura: 0.1, expo: 2.2, ondas: 30, amp: 0.012, bolhas: 0.35 }), 0.54),
+  "#b9783a", "#e6b36c", 0.07) };
+
+  // Risole: meia-lua mais gordinha, sem garfo, toda empanada
+  F.risole = { mat: "frito", geo: pintar(normalizar(
+    massaRecheada(contornoMeiaLua, () => 0, { altura: 0.17, base: 0.7, expo: 2 }), 0.5),
+  "#6e3a14", "#b9793a") };
+
+  // Pastel de forno: meia-lua dourada e brilhante com borda apertada
+  F.pastelForno = { mat: "assado", geo: pintar(normalizar(
+    massaRecheada(contornoMeiaLua, apertoMeiaLua, { altura: 0.14, expo: 2.4, ondas: 22, amp: 0.014 }), 0.52),
+  "#a8682a", "#e2a24c") };
+
+  // Saltenha: oval em pé com a costura trançada (repulgue) no topo
+  {
+    const corpo = new THREE.SphereGeometry(0.5, 40, 24);
+    const p = corpo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      let y = p.getY(i);
+      if (y < 0) y *= 0.45;                                // base achatada
+      p.setXYZ(i, p.getX(i) * 1.0, y * 0.78, p.getZ(i) * 0.58);
+    }
+    corpo.computeVertexNormals();
+    pintar(corpo, "#9c4f1f", "#d98c42", 0.05);
+    const partes = [corpo];
+    const N = 15;
+    for (let k = 0; k < N; k++) {
+      const t = (k / (N - 1)) * 2 - 1;                     // -1..1 ao longo do comprimento
+      const x = t * 0.43;
+      const y = 0.39 * Math.sqrt(Math.max(0, 1 - t * t * 0.92)) + 0.02;
+      const dobra = new THREE.SphereGeometry(0.06, 10, 8).scale(0.8, 0.75, 1.15);
+      dobra.rotateX(k % 2 ? 0.55 : -0.55);
+      dobra.rotateZ(-t * 0.9);
+      dobra.translate(x, y, 0);
+      partes.push(pintar(dobra, "#b8662c", "#e7a456", 0.04));
+    }
+    F.saltenha = { mat: "assado", geo: normalizar(mergeGeometries(partes), 0.52) };
+  }
 
   F.travesseiro = { mat: "frito", geo: pintar(normalizar(
     extrudar(formaArredondada([[-0.36, -0.25], [0.36, -0.25], [0.36, 0.25], [-0.36, 0.25]], 0.13), 0.1, 0.09), 0.48), "#77421a", "#c08540") };
@@ -364,6 +459,19 @@ function criarFormas() {
   }
 
   F.sonho = { mat: "acucar", geo: pintar(normalizar(new THREE.SphereGeometry(0.5, 32, 20).scale(1, 0.78, 1), 0.42), "#a87a45", "#eadbbd", 0.04) };
+
+  // Sonho: bolinha com açúcar e o recheio saindo pelo corte da lateral
+  const sonhoCom = (cor1, cor2) => {
+    const massa = new THREE.SphereGeometry(0.5, 36, 22).scale(1, 0.78, 1);
+    pintar(massa, "#a87a45", "#eadbbd", 0.04);
+    const recheio = new THREE.TorusGeometry(0.47, 0.075, 10, 48, PI * 1.05).rotateX(PI / 2).rotateY(PI * 0.97);
+    recheio.scale(1, 0.85, 1);
+    pintar(recheio, cor1, cor2, 0.05);
+    return normalizar(mergeGeometries([massa, recheio]), 0.42);
+  };
+  F.sonhoGoiabada = { mat: "acucar", geo: sonhoCom("#7c1a17", "#a8302a") };
+  F.sonhoDoceLeite = { mat: "acucar", geo: sonhoCom("#a8692e", "#c98a48") };
+  F.sonhoChocolate = { mat: "acucar", geo: sonhoCom("#2e160b", "#4a2614") };
 
   F.pao = { mat: "pao", geo: pintar(normalizar(new THREE.SphereGeometry(0.5, 32, 20).scale(1, 0.74, 1), 0.38), "#b5793a", "#e2ad60") };
 
