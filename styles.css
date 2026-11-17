@@ -109,15 +109,12 @@ button, input, textarea { font: inherit; color: inherit; }
   max-width: 1200px;
   margin: 0 auto;
 }
-.marca { display: flex; flex-direction: column; line-height: 1; }
-.marca-nome { font-weight: 800; font-size: 1.15rem; letter-spacing: -0.03em; }
-.marca-sub {
-  margin-top: 4px;
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: var(--ouro);
+.marca { margin: 0; line-height: 0; }
+.marca img {
+  display: block;
+  height: 64px;
+  width: auto;
+  filter: drop-shadow(0 4px 14px rgba(224, 178, 92, 0.18));
 }
 .link-bolos {
   padding: 9px 16px;
@@ -586,7 +583,8 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* ---------- Telas maiores ---------- */
 @media (min-width: 960px) {
-  .topo { padding: 22px 24px 18px; }
+  .topo { padding: 18px 24px 16px; }
+  .marca img { height: 70px; }
   .app {
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
