@@ -6,7 +6,7 @@
 const CONFIG = {
   nomeLoja: "Cheiro de Pão",
   // WhatsApp que recebe os pedidos (formato: 55 + DDD + número, só dígitos)
-  whatsapp: "5575982419173",
+  whatsapp: "5575982065674", // TESTE: voltar para 5575982419173 (número da loja)
 
   // Regras do cardápio enviado pela loja
   minimoPadrao: 10,          // salgados tradicionais: mínimo de 10 por tipo
