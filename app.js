@@ -450,12 +450,44 @@
     return !primeiro;
   };
 
+  // ---------- Comanda para impressão ----------
+  // Código curto para a cozinha conferir a comanda com a conversa (sem letras/números parecidos)
+  const gerarCodigo = () => {
+    const letras = "ACDEFGHJKMNPQRTUVWXY3479";
+    const n = crypto.getRandomValues(new Uint32Array(4));
+    return Array.from(n, (x) => letras[x % letras.length]).join("");
+  };
+  // O pedido vai inteiro no "#" do link: nada passa pelo servidor e não precisa de banco de dados
+  const base64url = (texto) => {
+    const bytes = new TextEncoder().encode(texto);
+    let bin = "";
+    bytes.forEach((b) => { bin += String.fromCharCode(b); });
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  };
+  const linkComanda = (codigo, t, grupos) => {
+    const dados = {
+      v: 1,
+      c: codigo,
+      t: Date.now(),
+      n: estado.nome.trim(),
+      d: estado.data,
+      h: estado.hora,
+      p: estado.pagamento,
+      o: estado.obs.trim(),
+      e: CONFIG.entradaPercentual,
+      g: grupos.map((g) => [g.nome, t.porGrupo[g.id].itens.map((i) => [i.nome, i.q, i.centavos])]),
+    };
+    return new URL(`comanda.html#${base64url(JSON.stringify(dados))}`, location.href).href;
+  };
+
   const montarMensagem = () => {
     const t = totais();
     const grupos = GRUPOS.filter((g) => t.porGrupo[g.id].unidades > 0);
+    const codigo = gerarCodigo();
     const titulo = grupos.length === 1 ? `*Nova encomenda de ${grupos[0].plural}*` : `*Nova encomenda: ${grupos.map((g) => g.plural).join(" e ")}*`;
     const linhas = [
       titulo,
+      `Pedido #${codigo}`,
       ``,
       `*Nome:* ${estado.nome.trim()}`,
       `*Retirada:* ${dataBR(estado.data)} às ${estado.hora}`,
@@ -475,6 +507,7 @@
       `*Entrada (${CONFIG.entradaPercentual}%): ${fmt(t.entrada)}*`,
     );
     if (estado.obs.trim()) linhas.push(``, `*Observações:* ${estado.obs.trim()}`);
+    linhas.push(``, `Comanda para impressão (uso da loja):`, linkComanda(codigo, t, grupos));
     return linhas.join("\n");
   };
   const linkWhatsApp = () => `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(montarMensagem())}`;

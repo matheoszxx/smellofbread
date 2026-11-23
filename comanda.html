@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0f0906">
+  <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
+  <title>Comanda · Cheiro de Pão</title>
+  <style>
+    /* ---------- Tela ---------- */
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+      background: #0f0906;
+      color: #f3e7d8;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    .acoes { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+    .imprimir {
+      border: 0;
+      border-radius: 999px;
+      padding: 16px 36px;
+      background: linear-gradient(135deg, #f3d38c, #e0b25c 55%, #b9862f);
+      color: #24140a;
+      font: inherit;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(224, 178, 92, 0.25);
+    }
+    .imprimir:focus-visible { outline: 2px solid #f3d38c; outline-offset: 3px; }
+    .acoes small { color: #a8957f; font-size: 0.85rem; }
+
+    /* ---------- Papel (80 mm, área útil ~72 mm) ---------- */
+    .papel {
+      width: 72mm;
+      padding: 5mm 3mm 6mm;
+      background: #fff;
+      color: #000;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11pt;
+      line-height: 1.3;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    }
+    .papel h1 { margin: 0; font-size: 15pt; text-align: center; letter-spacing: 0.04em; }
+    .papel .sub { text-align: center; font-size: 9pt; margin-bottom: 2mm; }
+    .corte { border: 0; border-top: 1.5px dashed #000; margin: 2.5mm 0; }
+    .codigo { text-align: center; font-size: 18pt; font-weight: 800; letter-spacing: 0.08em; }
+    .feito { text-align: center; font-size: 9pt; }
+    .dado { margin: 0.8mm 0; }
+    .dado b { display: inline-block; min-width: 20mm; }
+    .retirada { font-size: 13pt; font-weight: 800; margin: 1.5mm 0; }
+    .grupo { margin: 2mm 0 1mm; font-weight: 800; font-size: 11.5pt; text-transform: uppercase; }
+    .item { display: grid; grid-template-columns: 11mm 1fr auto; gap: 1.5mm; align-items: baseline; margin: 0.8mm 0; }
+    .item .q { font-weight: 800; font-size: 12.5pt; }
+    .item .v { font-size: 9.5pt; white-space: nowrap; }
+    .linha-total { display: flex; justify-content: space-between; margin: 0.8mm 0; }
+    .linha-total.forte { font-size: 13pt; font-weight: 800; }
+    .obs { margin: 1mm 0; white-space: pre-wrap; word-break: break-word; }
+    .checar { margin-top: 3mm; font-size: 10.5pt; }
+    .checar div { margin: 1.5mm 0; display: flex; align-items: center; gap: 2mm; }
+    .caixinha { width: 3.5mm; height: 3.5mm; border: 1.5px solid #000; flex: none; }
+    .rodape { text-align: center; font-size: 8.5pt; margin-top: 3mm; }
+
+    .invalido { max-width: 340px; text-align: center; color: #d9c8b4; line-height: 1.5; }
+    .invalido strong { display: block; font-size: 1.15rem; color: #f3e7d8; margin-bottom: 6px; }
+
+    /* ---------- Impressão ---------- */
+    @page { margin: 0; }
+    @media print {
+      body { background: #fff; padding: 0; min-height: 0; display: block; }
+      .acoes, .invalido { display: none !important; }
+      .papel { box-shadow: none; margin: 0 auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="acoes" id="acoes" hidden>
+    <button type="button" class="imprimir" id="imprimir">Imprimir comanda</button>
+    <small>Escolha a impressora térmica na janela que abrir.</small>
+  </div>
+
+  <main class="papel" id="papel" hidden></main>
+
+  <p class="invalido" id="invalido" hidden>
+    <strong>Não foi possível abrir esta comanda.</strong>
+    O link parece incompleto. Abra de novo pela mensagem do pedido no WhatsApp.
+  </p>
+
+  <script>
+    (() => {
+      "use strict";
+      const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+      const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+      const fmt = (centavos) => moeda.format(centavos / 100);
+      const p2 = (n) => String(n).padStart(2, "0");
+
+      const lerPedido = () => {
+        const hash = location.hash.slice(1);
+        if (!hash) return null;
+        const bin = atob(hash.replace(/-/g, "+").replace(/_/g, "/"));
+        const texto = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+        const d = JSON.parse(texto);
+        if (!d || d.v !== 1 || !Array.isArray(d.g)) return null;
+        return d;
+      };
+
+      // Tudo vem do link, então só entra na página como texto (nunca como HTML)
+      const el = (tag, classe, texto) => {
+        const e = document.createElement(tag);
+        if (classe) e.className = classe;
+        if (texto != null) e.textContent = String(texto);
+        return e;
+      };
+      const dado = (rotulo, valor, classe) => {
+        const p = el("p", classe || "dado");
+        p.append(el("b", null, rotulo), document.createTextNode(" " + String(valor || "—")));
+        return p;
+      };
+      const dataBR = (iso) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+        if (!m) return iso || "—";
+        const dt = new Date(+m[1], +m[2] - 1, +m[3]);
+        return `${DIAS[dt.getDay()]}, ${m[3]}/${m[2]}/${m[1]}`;
+      };
+
+      let pedido = null;
+      try { pedido = lerPedido(); } catch (_) { pedido = null; }
+
+      if (!pedido) {
+        document.getElementById("invalido").hidden = false;
+        return;
+      }
+
+      const papel = document.getElementById("papel");
+      const corte = () => papel.append(el("hr", "corte"));
+
+      papel.append(el("h1", null, "CHEIRO DE PÃO"), el("div", "sub", "Delicatessen · Encomenda"));
+      corte();
+      papel.append(el("div", "codigo", `PEDIDO #${pedido.c || "----"}`));
+      if (pedido.t) {
+        const f = new Date(pedido.t);
+        papel.append(el("div", "feito", `Feito em ${p2(f.getDate())}/${p2(f.getMonth() + 1)} às ${p2(f.getHours())}:${p2(f.getMinutes())}`));
+      }
+      corte();
+      papel.append(
+        dado("Cliente:", pedido.n),
+        el("p", "retirada", `Retirada: ${dataBR(pedido.d)}${pedido.h ? " às " + pedido.h : ""}`),
+        dado("Pagamento:", pedido.p),
+      );
+      corte();
+
+      let total = 0;
+      pedido.g.forEach(([nomeGrupo, itens]) => {
+        if (!Array.isArray(itens)) return;
+        const unidades = itens.reduce((s, i) => s + (+i[1] || 0), 0);
+        papel.append(el("div", "grupo", `${nomeGrupo} (${unidades} un.)`));
+        itens.forEach(([nome, q, centavos]) => {
+          const linha = (+q || 0) * (+centavos || 0);
+          total += linha;
+          const li = el("div", "item");
+          li.append(el("span", "q", `${q}×`), el("span", null, nome), el("span", "v", fmt(linha)));
+          papel.append(li);
+        });
+      });
+      corte();
+
+      const entrada = Math.ceil((total * (+pedido.e || 50)) / 100);
+      const linhaTotal = (rotulo, valor, forte) => {
+        const d = el("div", "linha-total" + (forte ? " forte" : ""));
+        d.append(el("span", null, rotulo), el("span", null, fmt(valor)));
+        return d;
+      };
+      papel.append(
+        linhaTotal("TOTAL", total, true),
+        linhaTotal(`Entrada (${+pedido.e || 50}%)`, entrada),
+        linhaTotal("Restante na retirada", total - entrada),
+      );
+
+      if (pedido.o) {
+        corte();
+        papel.append(el("b", null, "Observações:"), el("p", "obs", pedido.o));
+      }
+
+      corte();
+      const checar = el("div", "checar");
+      ["Entrada recebida", "Pedido separado", "Retirado"].forEach((t) => {
+        const linha = el("div");
+        linha.append(el("span", "caixinha"), document.createTextNode(t));
+        checar.append(linha);
+      });
+      papel.append(checar, el("div", "rodape", "Rua Grisógno Fernandes, 972 · Cruz das Almas"));
+
+      document.title = `Comanda #${pedido.c} · ${pedido.n || "Cheiro de Pão"}`;
+      papel.hidden = false;
+      document.getElementById("acoes").hidden = false;
+      document.getElementById("imprimir").addEventListener("click", () => window.print());
+    })();
+  </script>
+</body>
+</html>
